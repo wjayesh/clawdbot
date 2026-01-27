@@ -248,13 +248,21 @@ export class ComposioClient {
    */
   async listToolkits(): Promise<string[]> {
     try {
-      const apps = await this.client.apps.list();
-      return apps
-        .map((app: { name?: string }) => app.name || "")
+      // Use low-level client for better error messages
+      const response = await this.client.client.toolkits.list();
+      const toolkits = response?.items || [];
+      return toolkits
+        .map((tk: { slug?: string; name?: string }) => tk.slug || tk.name || "")
         .filter((name: string) => name && this.isToolkitAllowed(name));
-    } catch (err) {
+    } catch (err: unknown) {
+      // Try to extract detailed error from Composio API response
+      const errObj = err as { status?: number; error?: { error?: { message?: string } } };
+      if (errObj?.status === 401) {
+        throw new Error("Invalid Composio API key. Get a valid key from platform.composio.dev/settings");
+      }
+      const apiMsg = errObj?.error?.error?.message;
       throw new Error(
-        `Failed to list toolkits: ${err instanceof Error ? err.message : String(err)}`
+        `Failed to list toolkits: ${apiMsg || (err instanceof Error ? err.message : String(err))}`
       );
     }
   }
