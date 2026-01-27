@@ -12,7 +12,7 @@ The Clawdbot Mahilo Plugin is an extension that integrates Clawdbot agents with 
 - Send messages to other users' agents via `talk_to_agent` tool
 - Receive messages from other agents via webhook
 - Apply local policy filters before messages leave
-- Encrypt outbound messages and verify/decrypt inbound messages (E2E mode)
+- Phase 1: HMAC-verified webhooks; E2E encryption planned
 
 ---
 
@@ -48,7 +48,7 @@ The Mahilo plugin adds inter-agent communication capabilities to Clawdbot:
 - Store messages long-term (Mahilo handles delivery tracking)
 - Manage friendships (users do this via Mahilo dashboard/API)
 - Store memories (Clawdbot's existing memory system handles this)
-- Make routing decisions (Mahilo handles routing)
+- Perform registry-side routing (plugin selects a connection; Mahilo handles delivery)
 
 ---
 
@@ -78,7 +78,7 @@ The Mahilo plugin adds inter-agent communication capabilities to Clawdbot:
 │  │   │              │    │   Handler    │    │   Client     │         │   │
 │  │   │ talk_to_agent│    │              │    │              │         │   │
 │  │   │ talk_to_group│    │ /mahilo/     │    │ API calls    │         │   │
-│  │   │ list_contacts│    │   incoming   │    │ to registry  │         │   │
+│  │   │ list_mahilo_contacts │   │   incoming   │    │ to registry  │         │   │
 │  │   └──────────────┘    └──────────────┘    └──────────────┘         │   │
 │  │           │                   │                   │                 │   │
 │  │           └───────────────────┴───────────────────┘                 │   │
@@ -119,10 +119,9 @@ Agent decides to contact another user
 │ 4. Apply local policy filters                                  │
 │    - Check blocked keywords                                     │
 │    - Check message length limits                                │
-│ 5. Encrypt + sign payload (E2E mode)                            │
-│ 6. Build request payload                                        │
-│ 7. Call Mahilo API: POST /api/v1/messages/send                 │
-│ 8. Return result to agent                                       │
+│ 5. Build request payload (plaintext in Phase 1)                 │
+│ 6. Call Mahilo API: POST /api/v1/messages/send                 │
+│ 7. Return result to agent                                       │
 └─────────────────────────────────────────────────────────────────┘
          │
          ▼
@@ -135,7 +134,7 @@ Agent decides to contact another user
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-Routing selection is local: the plugin uses connection labels/capabilities (and optional local LLM matching) to choose a recipient connection without exposing message content to the registry in E2E mode.
+Routing selection is local: the plugin uses connection labels/capabilities (and optional local LLM matching) to choose a recipient connection without exposing message content to the registry. Trusted routing is a future option.
 
 ### Data Flow: Inbound Message
 
@@ -156,7 +155,7 @@ Mahilo Registry sends message to callback URL
 │ 1. Verify X-Mahilo-Signature using callback_secret (raw body)  │
 │ 2. Verify timestamp is recent (prevent replay)                 │
 │ 3. De-dupe by message_id                                       │
-│ 4. Verify sender signature + decrypt payload (E2E mode)        │
+│ 4. Parse payload (sender verification/decryption in Phase 2)   │
 │ 5. Apply inbound policy filters (optional)                     │
 │ 6. Acknowledge receipt: respond 200 { acknowledged: true }     │
 │                                                                 │
@@ -171,12 +170,11 @@ Mahilo Registry sends message to callback URL
 │    "Message from bob via Mahilo: Hello!"                       │
 │    "Context: bob is greeting you"                              │
 │                                                                 │
-│ 2. Create agent run via internal API                           │
-│    - Uses existing isolated-agent/cron infrastructure          │
-│    - deliver: false (don't auto-send to channels)              │
-│    - Agent processes and may call talk_to_agent to respond     │
+│ 2. Phase 1: log formatted message + metadata                   │
+│    - No public plugin API for agent runs yet                   │
+│    - Keep this async and non-blocking                          │
 │                                                                 │
-│ 3. Agent runs, searches memory, decides response               │
+│ 3. Future: trigger isolated agent run once SDK exposes it      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -190,116 +188,120 @@ extensions/mahilo/
 ├── package.json                   # Dependencies
 ├── index.ts                       # Plugin entry point
 ├── README.md                      # User documentation
+├── tsconfig.json                  # TypeScript config
 └── src/
     ├── config.ts                  # Configuration schema and defaults
     ├── types.ts                   # TypeScript types
     │
     ├── client/
     │   ├── mahilo-api.ts          # HTTP client for Mahilo Registry
-    │   ├── auth.ts                # API key handling
-    │   └── types.ts               # API request/response types
+    │   └── index.ts               # Client exports
     │
     ├── tools/
     │   ├── index.ts               # Tool exports
     │   ├── talk-to-agent.ts       # Send message to a friend's agent
-    │   ├── talk-to-group.ts       # Send message to a group (Phase 2)
-    │   └── list-contacts.ts       # List friends and groups (optional)
+    │   └── list-contacts.ts       # List friends (optional)
     │
     ├── webhook/
     │   ├── index.ts               # Webhook route registration
     │   ├── handler.ts             # Incoming message handler
     │   ├── signature.ts           # Signature verification
+    │   ├── dedup.ts               # Message de-dupe cache
     │   └── trigger-agent.ts       # Trigger agent run for incoming messages
     │
     └── policy/
         ├── index.ts               # Policy exports
-        ├── local-filter.ts        # Local policy enforcement
-        └── cache.ts               # Cached policies from Mahilo
+        └── local-filter.ts        # Local policy enforcement
 ```
 
 ### Plugin Manifest
 
 ```json
 {
-  "name": "mahilo",
-  "version": "0.1.0",
+  "id": "mahilo",
+  "name": "Mahilo",
   "description": "Inter-agent communication via Mahilo network",
-  "main": "index.ts",
-  "author": "Clawdbot",
-  "license": "MIT",
-  "clawdbot": {
-    "sdk": ">=0.1.0"
-  },
-  "tools": [
-    {
-      "name": "talk_to_agent",
-      "description": "Send a message to another user's agent through the Mahilo network"
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "mahilo_api_key": {
+        "type": "string",
+        "description": "Your Mahilo API key (get from dashboard)"
+      },
+      "mahilo_api_url": {
+        "type": "string",
+        "default": "https://api.mahilo.dev/api/v1",
+        "description": "Mahilo Registry API URL"
+      },
+      "callback_path": {
+        "type": "string",
+        "default": "/mahilo/incoming",
+        "description": "Path for incoming message webhook"
+      },
+      "callback_url_override": {
+        "type": "string",
+        "description": "Full callback URL override"
+      },
+      "connection_label": {
+        "type": "string",
+        "default": "default",
+        "description": "Label for this agent connection (e.g., work, personal)"
+      },
+      "connection_description": {
+        "type": "string",
+        "description": "Short description used for routing hints"
+      },
+      "connection_capabilities": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [],
+        "description": "Tags/capabilities for routing selection"
+      },
+      "auto_register": {
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically register agent with Mahilo on startup"
+      },
+      "local_policies": {
+        "type": "object",
+        "description": "Local outbound policy rules",
+        "properties": {
+          "maxMessageLength": { "type": "number" },
+          "minMessageLength": { "type": "number" },
+          "blockedKeywords": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "blockedPatterns": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "requireContext": { "type": "boolean" }
+        }
+      },
+      "inbound_policies": {
+        "type": "object",
+        "description": "Local inbound policy rules",
+        "properties": {
+          "blockedKeywords": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "blockedPatterns": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
     },
-    {
-      "name": "talk_to_group",
-      "description": "Send a message to a group through the Mahilo network"
-    }
-  ],
-  "hooks": {
-    "onLoad": "onPluginLoad",
-    "onUnload": "onPluginUnload"
-  },
-  "routes": [
-    {
-      "method": "POST",
-      "path": "/mahilo/incoming",
-      "handler": "handleIncomingMessage"
-    }
-  ],
-  "config": {
-    "mahilo_api_url": {
-      "type": "string",
-      "default": "https://api.mahilo.dev/api/v1",
-      "description": "Mahilo Registry API URL"
-    },
-    "mahilo_api_key": {
-      "type": "string",
-      "secret": true,
-      "description": "Your Mahilo API key"
-    },
-    "callback_path": {
-      "type": "string",
-      "default": "/mahilo/incoming",
-      "description": "Path for incoming message webhook"
-    },
-    "connection_label": {
-      "type": "string",
-      "default": "default",
-      "description": "Label for this agent connection (e.g., work, personal)"
-    },
-    "connection_description": {
-      "type": "string",
-      "description": "Short description used for routing hints"
-    },
-    "connection_capabilities": {
-      "type": "array",
-      "items": { "type": "string" },
-      "default": [],
-      "description": "Tags/capabilities for routing selection"
-    },
-    "message_privacy_mode": {
-      "type": "string",
-      "default": "e2e",
-      "description": "e2e (default) or trusted (plaintext for registry-side routing)"
-    },
-    "auto_register": {
-      "type": "boolean",
-      "default": true,
-      "description": "Automatically register agent with Mahilo on startup"
-    },
-    "inbound_policies": {
-      "type": "object",
-      "default": {},
-      "description": "Local inbound policy rules"
-    }
+    "required": []
   }
 }
 ```
+
+The manifest is for discovery and config validation only. Tools, HTTP routes, hooks, and services are registered in code via the plugin API.
 
 ---
 
@@ -313,22 +315,23 @@ Users must configure these before using the plugin:
 |-----|------|-------------|
 | `mahilo_api_key` | string | API key from Mahilo (get from dashboard) |
 
+The schema does not hard-require this key so the plugin can load without crashing, but tools will return errors until it is set.
+
 ### Optional Configuration
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `mahilo_api_url` | string | `https://api.mahilo.dev/api/v1` | Registry API URL |
 | `callback_path` | string | `/mahilo/incoming` | Webhook path |
-| `callback_url_override` | string | auto-detected | Full callback URL if auto-detection fails |
+| `callback_url_override` | string | none | Full callback URL override; if unset, the plugin falls back to localhost and logs a warning |
 | `connection_label` | string | `default` | Label for this agent connection |
 | `connection_description` | string | `""` | Short description for routing |
 | `connection_capabilities` | string[] | `[]` | Tags/capabilities for routing |
-| `message_privacy_mode` | string | `e2e` | `e2e` or `trusted` |
 | `auto_register` | boolean | `true` | Register agent on plugin load |
 | `local_policies` | object | `{}` | Local policy rules |
 | `inbound_policies` | object | `{}` | Local inbound policy rules |
 
-`message_privacy_mode` controls whether the plugin encrypts payloads before sending (default) or sends plaintext for registry-side routing and policy evaluation (trusted mode).
+E2E encryption and trusted routing are future enhancements and are not part of the Phase 1 plugin config.
 
 ### Configuration Example
 
@@ -336,19 +339,24 @@ Users must configure these before using the plugin:
 // In Clawdbot config
 {
   plugins: {
-    mahilo: {
-      mahilo_api_key: "mhl_abc123...",
-      mahilo_api_url: "https://api.mahilo.dev/api/v1",  // or self-hosted URL
-      connection_label: "sports",
-      connection_description: "Best for sports-related questions",
-      connection_capabilities: ["sports", "schedule"],
-      auto_register: true,
-      local_policies: {
-        maxMessageLength: 4000,
-        blockedKeywords: ["password", "ssn", "credit card"],
-      },
-      inbound_policies: {
-        blockedKeywords: ["ssn", "credit card"]
+    entries: {
+      mahilo: {
+        enabled: true,
+        config: {
+          mahilo_api_key: "mhl_abc123...",
+          mahilo_api_url: "https://api.mahilo.dev/api/v1",  // or self-hosted URL
+          connection_label: "sports",
+          connection_description: "Best for sports-related questions",
+          connection_capabilities: ["sports", "schedule"],
+          auto_register: true,
+          local_policies: {
+            maxMessageLength: 4000,
+            blockedKeywords: ["password", "ssn", "credit card"],
+          },
+          inbound_policies: {
+            blockedKeywords: ["ssn", "credit card"]
+          }
+        }
       }
     }
   }
@@ -371,15 +379,19 @@ interface TalkToAgentInput {
   connection_label?: string; // Target a specific connection label (e.g., "work")
   routing_tags?: string[];   // Hints for routing selection
 }
-// Note: tools return a human-readable string in Clawdbot
+// Note: tools return AgentToolResult objects with text content
 ```
 
 **Tool Definition:**
 
 ```typescript
-export const talkToAgentTool = {
-  name: "talk_to_agent",
-  description: `Send a message to another user's agent through the Mahilo network.
+import { Type } from "@sinclair/typebox";
+import type { ClawdbotPluginApi } from "clawdbot/plugin-sdk";
+
+export function createTalkToAgentTool(api: ClawdbotPluginApi) {
+  return {
+    name: "talk_to_agent",
+    description: `Send a message to another user's agent through the Mahilo network.
 
 Use this when you need to:
 - Ask another user's agent a question
@@ -397,38 +409,35 @@ Parameters:
 - connection_label: (Optional) Target a specific connection label (e.g., "work")
 - routing_tags: (Optional) Tags to help select the best recipient connection`,
   
-  parameters: {
-    type: "object",
-    properties: {
-      recipient: {
-        type: "string",
-        description: "Username of the recipient (must be a friend on Mahilo)"
-      },
-      message: {
-        type: "string",
-        description: "The message to send"
-      },
-      context: {
-        type: "string",
-        description: "Why you're sending this message (helps recipient understand)"
-      },
-      connection_label: {
-        type: "string",
-        description: "Preferred recipient connection label (e.g., work, personal)"
-      },
-      routing_tags: {
-        type: "array",
-        items: { type: "string" },
-        description: "Routing hints to select the best recipient connection"
-      }
-    },
-    required: ["recipient", "message"]
-  },
+    parameters: Type.Object({
+      recipient: Type.String({
+        description: "Username of the recipient (must be a friend on Mahilo)",
+      }),
+      message: Type.String({
+        description: "The message to send",
+      }),
+      context: Type.Optional(
+        Type.String({
+          description: "Why you're sending this message (helps recipient understand)",
+        }),
+      ),
+      connection_label: Type.Optional(
+        Type.String({
+          description: "Preferred recipient connection label (e.g., work, personal)",
+        }),
+      ),
+      routing_tags: Type.Optional(
+        Type.Array(Type.String(), {
+          description: "Routing hints to select the best recipient connection",
+        }),
+      ),
+    }),
 
-  execute: async (input: TalkToAgentInput, ctx: ToolContext): Promise<string> => {
-    // Implementation in talk-to-agent.ts
-  }
-};
+    async execute(_id: string, params: Record<string, unknown>) {
+      // Implementation in talk-to-agent.ts
+    },
+  };
+}
 ```
 
 **Implementation Logic:**
@@ -436,91 +445,84 @@ Parameters:
 ```typescript
 // src/tools/talk-to-agent.ts
 
-export async function executeTalkToAgent(
-  input: TalkToAgentInput,
-  ctx: ToolContext
-): Promise<string> {
-  const { recipient, message, context, connection_label, routing_tags } = input;
-  const config = ctx.pluginConfig.mahilo;
-  const mahiloClient = getMahiloClient(config);
+export function createTalkToAgentTool(api: ClawdbotPluginApi) {
+  return {
+    name: "talk_to_agent",
+    description: "...",
+    parameters: Type.Object({ ... }),
+    async execute(_id: string, params: Record<string, unknown>) {
+      const recipient = String(params.recipient ?? "").trim();
+      const message = String(params.message ?? "").trim();
+      const context = params.context ? String(params.context).trim() : undefined;
+      const connectionLabel = params.connection_label
+        ? String(params.connection_label).trim()
+        : undefined;
+      const routingTags = Array.isArray(params.routing_tags)
+        ? params.routing_tags.map((tag) => String(tag))
+        : undefined;
 
-  // 1. Input validation
-  if (!recipient || recipient.trim() === "") {
-    return "Error: recipient is required";
-  }
-  if (!message || message.trim() === "") {
-    return "Error: message is required";
-  }
+      const config = resolveConfig(api.pluginConfig);
+      const mahiloClient = getMahiloClient(config);
 
-  // 2. Resolve recipient connections and select target
-  const connections = await mahiloClient.getContactConnections(recipient);
-  const selected = selectConnection(connections, {
-    connectionLabel: connection_label,
-    routingTags: routing_tags,
-    message,
-    context,
-  });
-  if (!selected) {
-    return `Cannot send message: no suitable connection found for ${recipient}.`;
-  }
+      if (!recipient) return formatError("Recipient is required");
+      if (!message) return formatError("Message is required");
 
-  // 3. Apply local policy filters
-  const policyResult = await applyLocalPolicies(message, context, config.local_policies);
-  if (!policyResult.allowed) {
-    return `Message blocked by local policy: ${policyResult.reason}`;
-  }
+      const policyResult = applyLocalPolicies(message, context, config.local_policies);
+      if (!policyResult.allowed) {
+        return formatResult(`Message blocked by local policy: ${policyResult.reason}`);
+      }
 
-  // 4. Encrypt + sign payload if E2E mode
-  const payload = buildPayload({ message, context }, config.message_privacy_mode, selected.public_key);
+      let recipientConnectionId: string | undefined;
+      try {
+        const connections = await mahiloClient.getContactConnections(recipient);
+        const selected = selectConnection(connections, { connectionLabel, routingTags });
+        recipientConnectionId = selected?.id;
+      } catch (error) {
+        if (error instanceof MahiloError && error.code === ErrorCodes.NOT_FRIENDS) {
+          return formatResult(
+            `Cannot send message: ${recipient} is not in your friends list. Add them as a friend on Mahilo first.`,
+          );
+        }
+      }
 
-  // 5. Send to Mahilo
-  try {
-    const response = await mahiloClient.sendMessage({
-      recipient,
-      recipient_connection_id: selected.id,
-      message: payload.message,
-      context: config.message_privacy_mode === "trusted" ? (context || "No context provided") : undefined,
-      payload_type: payload.payload_type,
-      encryption: payload.encryption,
-      sender_signature: payload.sender_signature,
-    });
+      const response = await mahiloClient.sendMessage({
+        recipient,
+        message,
+        context,
+        recipient_connection_id: recipientConnectionId,
+        idempotency_key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      });
 
-    // 4. Return appropriate message based on status
-    switch (response.status) {
-      case "delivered":
-        return `Message sent to ${recipient}. They will process it and may respond via their own message to you.`;
-      
-      case "pending":
-        return `Message queued for ${recipient}. Delivery pending - they may be offline. Message ID: ${response.message_id}`;
-      
-      case "rejected":
-        return `Message rejected: ${response.rejection_reason || "Policy violation"}`;
-      
-      default:
-        return `Message sent to ${recipient}. Status: ${response.status}`;
-    }
-  } catch (error) {
-    // Handle specific error types
-    if (error.code === "NOT_FRIENDS") {
-      return `Cannot send message: ${recipient} is not in your friends list. Add them as a friend on Mahilo first.`;
-    }
-    if (error.code === "USER_NOT_FOUND") {
-      return `Cannot send message: User "${recipient}" not found on Mahilo.`;
-    }
-    if (error.code === "RATE_LIMITED") {
-      return `Cannot send message: You're sending too many messages. Please wait before trying again.`;
-    }
-    
-    return `Failed to send message: ${error.message}`;
-  }
+      switch (response.status) {
+        case "delivered":
+          return formatResult(
+            `Message sent to ${recipient}. They will process it and may respond via their own message to you.`,
+          );
+        case "pending":
+          return formatResult(
+            `Message queued for ${recipient}. Delivery pending - they may be offline. Message ID: ${response.message_id}`,
+          );
+        case "rejected":
+          return formatResult(
+            `Message rejected: ${response.rejection_reason ?? "Policy violation"}`,
+          );
+        default:
+          return formatResult(`Message sent to ${recipient}. Status: ${response.status}`);
+      }
+    },
+  };
 }
 ```
 
 ### talk_to_group (Phase 2)
 
+Phase 2 only; not implemented in Phase 1.
+
 Send a message to a group.
 
 ```typescript
+import { Type } from "@sinclair/typebox";
+
 export const talkToGroupTool = {
   name: "talk_to_group",
   description: `Send a message to a group through the Mahilo network.
@@ -532,80 +534,74 @@ Use this when you need to:
 
 You must be a member of the group to send messages to it.`,
 
-  parameters: {
-    type: "object",
-    properties: {
-      group_id: {
-        type: "string",
-        description: "ID of the group to message"
-      },
-      message: {
-        type: "string",
-        description: "The message to send"
-      },
-      context: {
-        type: "string",
-        description: "Why you're sending this message"
-      }
-    },
-    required: ["group_id", "message"]
-  },
+  parameters: Type.Object({
+    group_id: Type.String({
+      description: "ID of the group to message",
+    }),
+    message: Type.String({
+      description: "The message to send",
+    }),
+    context: Type.Optional(
+      Type.String({
+        description: "Why you're sending this message",
+      }),
+    ),
+  }),
 
-  execute: async (input, ctx): Promise<string> => {
+  async execute(_id: string, params: Record<string, unknown>) {
     // Similar to talk_to_agent but with recipient_type: "group"
   }
 };
 ```
 
-### list_contacts (Optional Helper)
+### list_mahilo_contacts (Optional Helper)
 
-List available friends and groups.
+List available friends.
 
 ```typescript
-export const listContactsTool = {
-  name: "list_mahilo_contacts",
-  description: "List your friends and groups on Mahilo that you can message",
+import { Type } from "@sinclair/typebox";
+import type { ClawdbotPluginApi } from "clawdbot/plugin-sdk";
 
-  parameters: {
-    type: "object",
-    properties: {
-      type: {
-        type: "string",
-        enum: ["friends", "groups", "all"],
-        description: "What type of contacts to list"
-      }
-    }
-  },
+export function createListContactsTool(api: ClawdbotPluginApi) {
+  return {
+    name: "list_mahilo_contacts",
+    description: "List your friends on Mahilo that you can message",
 
-  execute: async (input, ctx): Promise<string> => {
-    const mahiloClient = getMahiloClient(ctx.pluginConfig.mahilo);
-    
-    const friends = await mahiloClient.getFriends({ status: "accepted" });
-    const groups = await mahiloClient.getGroups();
-    
-    let result = "Your Mahilo contacts:\n\n";
-    
-    if (friends.length > 0) {
-      result += "Friends:\n";
-      for (const friend of friends) {
-        result += `- ${friend.username}${friend.display_name ? ` (${friend.display_name})` : ""}\n`;
+    parameters: Type.Object({
+      status: Type.Optional(
+        Type.String({
+          description: 'Filter by status: "accepted" (default), "pending", or "all"',
+        }),
+      ),
+    }),
+
+    async execute(_id: string, params: Record<string, unknown>) {
+      const statusParam = params.status ? String(params.status).trim().toLowerCase() : "accepted";
+      const mahiloClient = getMahiloClient(resolveConfig(api.pluginConfig));
+
+      const status = statusParam === "all" ? undefined : (statusParam as "accepted" | "pending");
+      const friends = await mahiloClient.getFriends(status);
+
+      let result = "Your Mahilo contacts:\n\n";
+      if (friends.length > 0) {
+        result += "Friends:\n";
+        for (const friend of friends) {
+          const displayName = friend.display_name ? ` (${friend.display_name})` : "";
+          result += `- ${friend.username}${displayName}\n`;
+        }
       }
-    }
-    
-    if (groups.length > 0) {
-      result += "\nGroups:\n";
-      for (const group of groups) {
-        result += `- ${group.name} (${group.member_count} members)\n`;
+
+      if (friends.length === 0) {
+        result =
+          statusParam === "accepted"
+            ? "You have no friends on Mahilo yet. Add friends via the Mahilo dashboard."
+            : `No ${statusParam} friend requests found.`;
       }
-    }
-    
-    if (friends.length === 0 && groups.length === 0) {
-      result = "You have no contacts on Mahilo yet. Add friends via the Mahilo dashboard.";
-    }
-    
-    return result;
-  }
-};
+
+      return { content: [{ type: "text", text: result.trim() }] };
+    },
+  };
+}
 ```
 
 ---
@@ -614,29 +610,22 @@ export const listContactsTool = {
 
 ### Route Registration
 
-The plugin registers a webhook route on the Clawdbot gateway:
+The plugin registers a webhook route on the Clawdbot gateway via the plugin API. Routes are path-only; enforce HTTP methods inside the handler if needed.
 
 ```typescript
-// src/webhook/index.ts
+// extensions/mahilo/index.ts
 
-export function registerWebhookRoutes(app: FastifyInstance, config: MahiloConfig) {
-  app.post(config.callback_path || "/mahilo/incoming", {
-    schema: {
-      body: incomingMessageSchema,
-      headers: {
-        type: "object",
-        required: ["x-mahilo-signature", "x-mahilo-timestamp"],
-        properties: {
-          "x-mahilo-signature": { type: "string" },
-          "x-mahilo-timestamp": { type: "string" }
-        }
-      }
-    }
-  }, handleIncomingMessage);
-}
+api.registerHttpRoute({
+  path: config.callback_path ?? "/mahilo/incoming",
+  handler: createWebhookHandler({
+    pluginConfig: api.pluginConfig,
+    logger: api.logger,
+    callbackSecret: null,
+  }),
+});
 ```
 
-Note: configure Fastify to preserve the raw request body (e.g., `request.rawBody`) so signature verification uses exact bytes.
+Note: handlers receive Node `IncomingMessage`/`ServerResponse`. Read the raw request body from the stream so signature verification uses exact bytes.
 
 ### Signature Verification
 
@@ -681,9 +670,7 @@ export function verifyMahiloSignature(
 ```typescript
 // src/webhook/handler.ts
 
-import { FastifyRequest, FastifyReply } from "fastify";
-import { verifyMahiloSignature } from "./signature";
-import { triggerAgentRun } from "./trigger-agent";
+import type { IncomingMessage as HttpIncomingMessage, ServerResponse } from "node:http";
 
 interface IncomingMessageBody {
   message_id: string;
@@ -695,67 +682,77 @@ interface IncomingMessageBody {
   timestamp: string;
 }
 
-export async function handleIncomingMessage(
-  request: FastifyRequest<{ Body: IncomingMessageBody }>,
-  reply: FastifyReply
-) {
-  const { body, headers } = request;
-  const config = getPluginConfig();
+export function createWebhookHandler(ctx: HandlerContext) {
+  return async (req: HttpIncomingMessage, res: ServerResponse): Promise<void> => {
+    const config = resolveConfig(ctx.pluginConfig);
 
-  // 1. Verify signature
-  const signature = headers["x-mahilo-signature"] as string;
-  const timestamp = headers["x-mahilo-timestamp"] as string;
-  const rawBody = request.rawBody as string; // use the raw body bytes, not JSON.stringify
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(chunk as Buffer);
+    }
+    const rawBody = Buffer.concat(chunks).toString("utf8");
 
-  if (!verifyMahiloSignature(rawBody, signature, timestamp, config.callback_secret)) {
-    return reply.status(401).send({ error: "Invalid signature" });
-  }
+    let body: IncomingMessageBody;
+    try {
+      body = JSON.parse(rawBody) as IncomingMessageBody;
+    } catch {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Invalid JSON body" }));
+      return;
+    }
 
-  // 2. Validate body
-  if (!body.message_id || !body.sender || !body.message) {
-    return reply.status(400).send({ error: "Invalid message format" });
-  }
+    const signature = req.headers["x-mahilo-signature"] as string | undefined;
+    const timestamp = req.headers["x-mahilo-timestamp"] as string | undefined;
+    const secret = ctx.callbackSecret ?? getCallbackSecret();
 
-  // 3. De-dupe message_id (avoid retry duplicates)
-  if (await hasProcessedMessage(body.message_id)) {
-    return reply.send({ acknowledged: true, duplicate: true });
-  }
+    if (secret && signature && timestamp) {
+      if (!verifyMahiloSignature(rawBody, signature, timestamp, secret)) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid signature" }));
+        return;
+      }
+    } else if (secret) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing signature headers" }));
+      return;
+    }
 
-  // 4. Verify sender signature + decrypt payload (E2E mode)
-  const decrypted = await verifyAndDecrypt(body);
-  if (!decrypted.ok) {
-    return reply.status(400).send({ error: "Invalid signature or payload" });
-  }
+    if (!body.message_id || !body.sender || !body.message) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Invalid message format" }));
+      return;
+    }
 
-  // 5. Apply inbound policies (optional)
-  const policyResult = await applyInboundPolicies(decrypted.payload);
-  if (!policyResult.allowed) {
-    // Acknowledge but don't process
-    return reply.send({ 
-      acknowledged: true, 
-      processed: false, 
-      reason: policyResult.reason 
+    if (hasProcessedMessage(body.message_id)) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ acknowledged: true, duplicate: true }));
+      return;
+    }
+
+    const policyResult = applyInboundPolicies(body.message, config.inbound_policies);
+    if (!policyResult.allowed) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          acknowledged: true,
+          processed: false,
+          reason: policyResult.reason,
+        }),
+      );
+      return;
+    }
+
+    markMessageProcessed(body.message_id);
+
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ acknowledged: true }));
+
+    setImmediate(() => {
+      triggerAgentRun(body, { logger: ctx.logger }).catch((error) => {
+        ctx.logger.error(`Failed to trigger agent run for message ${body.message_id}: ${error}`);
+      });
     });
-  }
-
-  // 6. Acknowledge receipt IMMEDIATELY
-  //    (Don't wait for agent processing - that's async)
-  reply.send({ acknowledged: true });
-
-  // 7. Trigger agent run asynchronously
-  //    (After response is sent, so we don't block)
-  setImmediate(() => {
-    triggerAgentRun({
-      messageId: body.message_id,
-      correlationId: body.correlation_id,
-      sender: body.sender,
-      senderAgent: body.sender_agent,
-      message: decrypted.payload.message,
-      context: decrypted.payload.context,
-    }).catch((error) => {
-      console.error(`Failed to trigger agent run for message ${body.message_id}:`, error);
-    });
-  });
+  };
 }
 ```
 
@@ -763,84 +760,49 @@ export async function handleIncomingMessage(
 
 ## Agent Run Triggering
 
-When a message comes in from Mahilo, we need to run the agent to process it. This must be done carefully:
+When a message comes in from Mahilo, we eventually want to run the agent to process it. This must be done carefully:
 
 1. **Non-blocking**: Don't block the webhook response
 2. **Async-safe**: Agent may take a long time (human in the loop)
 3. **Isolated**: Don't interfere with other ongoing conversations
+
+Phase 1 does not have a public plugin API to trigger agent runs, so the handler logs the formatted message and metadata. Full integration will land when the plugin SDK exposes a supported runner.
 
 ### Implementation
 
 ```typescript
 // src/webhook/trigger-agent.ts
 
-import { runIsolatedAgent } from "clawdbot/cron/isolated-agent";
+export async function triggerAgentRun(incoming: IncomingMessage, ctx: TriggerAgentContext): Promise<void> {
+  const formattedMessage = formatIncomingMessage(incoming);
 
-interface MahiloIncomingMessage {
-  messageId: string;
-  correlationId?: string;
-  sender: string;
-  senderAgent: string;
-  message: string;
-  context?: string;
+  ctx.logger.info(`[Mahilo] Received message from ${incoming.sender}: ${incoming.message_id}`);
+  ctx.logger.info(`[Mahilo] Message content:\n${formattedMessage}`);
+
+  // TODO: Integrate with a supported agent runner when the plugin SDK exposes one.
 }
 
-export async function triggerAgentRun(incoming: MahiloIncomingMessage): Promise<void> {
-  // Format the message for the agent
-  const agentInput = formatIncomingMessage(incoming);
-
-  // Create a cron-style payload to trigger the agent
-  const payload = {
-    kind: "agentTurn" as const,
-    message: agentInput,
-    deliver: false, // Don't auto-deliver to channels - let agent decide
-    metadata: {
-      source: "mahilo",
-      mahilo_message_id: incoming.messageId,
-      mahilo_correlation_id: incoming.correlationId,
-      mahilo_sender: incoming.sender,
-    },
-  };
-
-  // Trigger the agent run
-  // This uses existing Clawdbot infrastructure for isolated agent runs
-  await runIsolatedAgent({
-    payload,
-    sessionTarget: "isolated", // or "primary" depending on design choice
-  });
-}
-
-function formatIncomingMessage(incoming: MahiloIncomingMessage): string {
+function formatIncomingMessage(incoming: IncomingMessage): string {
   let formatted = `📬 Message from ${incoming.sender} (via Mahilo):\n\n`;
   formatted += incoming.message;
-  
+
   if (incoming.context) {
     formatted += `\n\n[Context: ${incoming.context}]`;
   }
-  
+
   formatted += `\n\n---\nTo reply, use the talk_to_agent tool with recipient "${incoming.sender}".`;
-  
+
   return formatted;
 }
 ```
 
 ### Integration with Clawdbot Cron System
 
-The plugin leverages Clawdbot's existing isolated agent infrastructure:
-
-```typescript
-// Looking at src/cron/isolated-agent/run.ts for integration points
-
-// Key aspects:
-// 1. deliver: false - We don't want responses going to WhatsApp/Telegram automatically
-// 2. The agent has access to talk_to_agent tool to respond
-// 3. The agent can also use message tool if it needs to contact its human
-// 4. Response to the other agent happens via a NEW talk_to_agent call
-```
+There is no public plugin API for isolated agent runs today. Do not import internal `clawdbot/cron/*` modules from external plugins. Track this as a core SDK enhancement and revisit `src/cron/isolated-agent/run.ts` once a supported entrypoint exists.
 
 ### Handling Long-Running Conversations
 
-When the agent needs human input:
+Future behavior once an agent runner is available:
 
 ```
 1. Mahilo delivers message to webhook
@@ -940,7 +902,7 @@ export function applyLocalPolicies(
 }
 ```
 
-Inbound policies use the same shape and run after decryption. The plugin merges registry-stored policies with local overrides and enforces them locally.
+Inbound policies use the same shape and run on the plaintext message in Phase 1. Registry-stored policies are a future enhancement; today the plugin uses local config only.
 
 ### Policy Cache
 
