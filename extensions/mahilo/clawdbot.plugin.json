@@ -1,0 +1,81 @@
+{
+  "id": "mahilo",
+  "name": "Mahilo",
+  "description": "Inter-agent communication via Mahilo network",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "mahilo_api_key": {
+        "type": "string",
+        "description": "Your Mahilo API key (get from dashboard)"
+      },
+      "mahilo_api_url": {
+        "type": "string",
+        "default": "https://api.mahilo.dev/api/v1",
+        "description": "Mahilo Registry API URL"
+      },
+      "callback_path": {
+        "type": "string",
+        "default": "/mahilo/incoming",
+        "description": "Path for incoming message webhook"
+      },
+      "callback_url_override": {
+        "type": "string",
+        "description": "Full callback URL if auto-detection fails"
+      },
+      "connection_label": {
+        "type": "string",
+        "default": "default",
+        "description": "Label for this agent connection (e.g., work, personal)"
+      },
+      "connection_description": {
+        "type": "string",
+        "description": "Short description used for routing hints"
+      },
+      "connection_capabilities": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [],
+        "description": "Tags/capabilities for routing selection"
+      },
+      "auto_register": {
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically register agent with Mahilo on startup"
+      },
+      "local_policies": {
+        "type": "object",
+        "description": "Local outbound policy rules",
+        "properties": {
+          "maxMessageLength": { "type": "number" },
+          "minMessageLength": { "type": "number" },
+          "blockedKeywords": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "blockedPatterns": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "requireContext": { "type": "boolean" }
+        }
+      },
+      "inbound_policies": {
+        "type": "object",
+        "description": "Local inbound policy rules",
+        "properties": {
+          "blockedKeywords": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "blockedPatterns": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "required": []
+  }
+}
