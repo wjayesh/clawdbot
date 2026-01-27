@@ -58,10 +58,11 @@ extensions/mahilo/
 ├── clawdbot.plugin.json   # Plugin manifest
 ├── package.json           # Dependencies
 ├── tsconfig.json          # TypeScript config
+├── index.ts               # Plugin entry point (default export)
 ├── src/
-│   ├── index.ts           # Entry point, exports
 │   ├── client/
-│   │   └── mahilo.ts      # Mahilo API client
+│   │   ├── index.ts
+│   │   └── mahilo-api.ts  # Mahilo API client
 │   ├── tools/
 │   │   ├── talk-to-agent.ts
 │   │   └── list-contacts.ts
@@ -69,7 +70,7 @@ extensions/mahilo/
 │   │   ├── handler.ts     # Incoming message handler
 │   │   └── signature.ts   # HMAC verification
 │   ├── policy/
-│   │   └── local.ts       # Local policy checks
+│   │   └── local-filter.ts # Local policy checks
 │   └── config.ts          # Configuration schema
 └── tests/
     ├── client.test.ts
@@ -82,11 +83,20 @@ extensions/mahilo/
 
 Study these files for patterns:
 
-1. **Plugin SDK**: Look at how other plugins register
-2. **Route Registration**: `src/gateway/` - how to add webhook routes
-3. **Tool Registration**: `src/tools/` - tool implementation patterns
-4. **Agent Triggering**: `src/cron/isolated-agent/run.ts` - triggering agent runs
-5. **Config System**: How plugins load configuration
+1. **Plugin SDK**: Look at how other plugins register (`extensions/discord/`, `extensions/lobster/`)
+2. **Route Registration**: `api.registerHttpRoute` uses Node req/res; see `src/gateway/server/plugins-http.ts`
+3. **Tool Registration**: Tool factories use `execute(_id, params)`; see `extensions/llm-task/`
+4. **Agent Triggering**: No public plugin API yet; keep Phase 1 logging stub
+5. **Config System**: Config lives under `plugins.entries.<id>.config`; manifest schema in `clawdbot.plugin.json`
+
+## Learnings
+
+- The manifest is for discovery and config validation only; tools, routes, and hooks are registered in code via the plugin API.
+- `clawdbot.plugin.json` must include `id` and `configSchema`, or the plugin fails validation.
+- Bundled plugins are disabled by default; enable via `plugins.entries.<id>.enabled` or `clawdbot plugins enable <id>`.
+- Plugin `register(api)` must be synchronous; if it returns a Promise, it is ignored.
+- `registerHttpRoute` matches paths only; parse raw bodies from the Node request stream and enforce HTTP methods inside the handler.
+- Tool handlers use `execute(_id, params)` and should return an `AgentToolResult` with `content`.
 
 ## Important Notes
 

@@ -40,14 +40,14 @@
 - **Priority**: P0
 - **Notes**: 
   - `clawdbot.plugin.json` with:
-    - name, version, description
-    - tools definitions
-    - config schema
-    - routes for webhook
-    - hooks (onLoad, onUnload)
+    - id (required)
+    - configSchema (required, JSON Schema)
+    - name/description/version (optional metadata)
+  - Tools, HTTP routes, hooks, and services are registered in code via the plugin API (not in the manifest)
 - **Acceptance Criteria**:
   - [ ] Valid plugin manifest
   - [ ] Config schema for API key, URL, etc.
+  - [ ] Manifest includes id + configSchema
 
 #### 1.3 Create package.json
 - **ID**: `PLG-003`
@@ -67,11 +67,9 @@
 - **Status**: `done`
 - **Priority**: P0
 - **Notes**: 
-  - `index.ts` exports:
-    - tools
-    - webhook handler
-    - onLoad hook (registration)
-    - onUnload hook (cleanup)
+  - `index.ts` default-exports the plugin definition
+  - Register tools/routes in `register(api)`
+  - Use `api.on("gateway_start")` / `api.on("gateway_stop")` for lifecycle hooks
 - **Acceptance Criteria**:
   - [ ] Plugin loads without errors
   - [ ] Exports are correct
@@ -86,9 +84,9 @@
 - **Priority**: P0
 - **Notes**: 
   - Required: mahilo_api_key
-  - Optional: mahilo_api_url, callback_path, auto_register, local_policies
+  - Optional: mahilo_api_url, callback_path, callback_url_override, auto_register, local_policies
   - Add: connection_label, connection_description, connection_capabilities
-  - Add: message_privacy_mode (e2e or trusted), inbound_policies
+  - Add: inbound_policies
   - Use TypeBox or Zod for schema
 - **Acceptance Criteria**:
   - [ ] Schema defined with types
@@ -103,6 +101,7 @@
   - Load config from Clawdbot config system
   - Validate on plugin load
   - Clear error messages for missing/invalid config
+  - Config lives under plugins.entries.<id>.config
 - **Acceptance Criteria**:
   - [ ] Config loads from Clawdbot
   - [ ] Validation errors are clear
@@ -133,7 +132,7 @@
 - **Notes**: 
   - POST /api/v1/messages/send
   - Payload: recipient, recipient_connection_id, message, context, correlation_id
-  - Support: payload_type, encryption metadata, sender_signature, idempotency_key
+  - Support: idempotency_key, recipient_type, routing_hints
   - Handle response statuses: delivered, pending, rejected
   - Map API errors to meaningful messages
 - **Acceptance Criteria**:
@@ -147,7 +146,7 @@
 - **Priority**: P1
 - **Notes**: 
   - GET /api/v1/friends?status=accepted
-  - For list_contacts tool
+  - For list_mahilo_contacts tool
   - Consider caching (5-minute TTL)
   - Add getContactConnections() for routing selection
 - **Acceptance Criteria**:
@@ -161,13 +160,13 @@
 - **Priority**: P0
 - **Notes**: 
   - POST /api/v1/agents
-  - Called on plugin load if auto_register=true
-  - Payload: framework="clawdbot", callback_url, label, description, capabilities, public_key, public_key_alg
-  - Generate/store keypair locally for E2E
-  - Store callback_secret for verification
+  - Triggered on gateway_start if auto_register=true
+  - Payload: framework="clawdbot", callback_url, label, description, capabilities
+  - Keypair and E2E fields are Phase 2
+  - Store callback_secret for verification (in memory; persistence is future work)
 - **Acceptance Criteria**:
   - [ ] Registers agent with Mahilo
-  - [ ] Includes connection label/capabilities and public key
+  - [ ] Includes connection label/capabilities
   - [ ] Stores callback_secret
   - [ ] Handles already-registered case
 
@@ -176,13 +175,11 @@
 - **Status**: `done`
 - **Priority**: P0
 - **Notes**: 
-  - Auto-detect public URL for callback
-  - Use gateway's public URL if available
   - Allow manual override via config
-  - Handle localhost for development
+  - Default to localhost for development and warn
+  - Public URL auto-detection is future work
 - **Acceptance Criteria**:
-  - [ ] Detects public URL
-  - [ ] Falls back to config override
+  - [ ] Uses config override when set
   - [ ] Works in dev (localhost)
 
 ---
@@ -199,16 +196,14 @@
     1. Input validation
     2. Resolve recipient connections + select target
     3. Local policy check
-    4. Encrypt + sign payload (E2E mode)
-    5. Call mahiloClient.sendMessage() with recipient_connection_id
-    6. Format result for agent
+    4. Call mahiloClient.sendMessage() with recipient_connection_id
+    5. Format result for agent
   - Handle all error cases gracefully
 - **Acceptance Criteria**:
   - [ ] Tool callable by agent
   - [ ] Validates inputs
   - [ ] Selects recipient connection (label/tags)
   - [ ] Applies local policies
-  - [ ] Encrypts payload in E2E mode
   - [ ] Returns clear messages
 
 #### 4.2 Tool Response Formatting
@@ -225,7 +220,7 @@
   - [ ] Helpful error messages
   - [ ] Actionable guidance
 
-#### 4.3 Implement list_contacts Tool (Optional)
+#### 4.3 Implement list_mahilo_contacts Tool (Optional)
 - **ID**: `PLG-014`
 - **Status**: `done`
 - **Priority**: P2
@@ -276,8 +271,8 @@
 - **Status**: `done`
 - **Priority**: P0
 - **Notes**: 
-  - Register POST /mahilo/incoming on gateway
-  - Use plugin route registration API
+  - Register /mahilo/incoming via api.registerHttpRoute (path-only)
+  - Enforce HTTP method inside handler if needed
   - Handle route already exists (plugin reload)
 - **Acceptance Criteria**:
   - [ ] Route registered on gateway
@@ -293,14 +288,14 @@
     1. Verify signature
     2. Validate body schema
     3. De-dupe by message_id
-    4. Verify sender signature + decrypt payload (E2E mode)
+    4. Apply inbound policies (optional)
     5. Send immediate 200 response
-    6. Trigger agent run async
+    6. Trigger agent run async (Phase 1 logs only)
   - Must not block on agent processing
 - **Acceptance Criteria**:
   - [ ] Verifies signature
   - [ ] De-dupes by message_id
-  - [ ] Verifies sender signature + decrypts payload
+  - [ ] Applies inbound policies
   - [ ] Responds immediately
   - [ ] Triggers async processing
 
@@ -318,9 +313,6 @@
       sender: string
       sender_agent: string
       message: string
-      payload_type?: string
-      encryption?: object
-      sender_signature?: object
       context?: string
       timestamp: string
     }
@@ -361,14 +353,13 @@
 - **Status**: `done`
 - **Priority**: P0
 - **Notes**:
-  - Phase 1: Logs messages for processing (infrastructure exposes cron API to plugins in future)
-  - Use isolated-agent/cron infrastructure (requires plugin SDK enhancement)
+  - Phase 1: Logs messages for processing (agent runner is not public in plugin SDK yet)
+  - Do not import internal cron modules from external plugins
   - Set deliver: false (don't auto-send to channels)
   - Pass metadata (mahilo_message_id, etc.)
   - Non-blocking (use setImmediate/nextTick)
 - **Acceptance Criteria**:
-  - [ ] Triggers agent run
-  - [ ] Agent receives message
+  - [ ] Logs formatted message and metadata
   - [ ] Doesn't block webhook
 
 #### 6.3 Handle Agent Run Errors
@@ -440,31 +431,31 @@
 
 ### 8. Plugin Lifecycle
 
-#### 8.1 onLoad Hook Implementation
+#### 8.1 Plugin Register Implementation
 - **ID**: `PLG-026`
 - **Status**: `done`
 - **Priority**: P0
 - **Notes**: 
-  - Called when plugin loads
+  - Executed inside plugin register(api)
   - Steps:
     1. Load and validate config
     2. Initialize Mahilo client
-    3. Register agent with Mahilo (if auto_register)
-    4. Register webhook route
-    5. Register tools
+    3. Register webhook route
+    4. Register tools
+    5. Register gateway_start hook for auto_register
 - **Acceptance Criteria**:
   - [ ] All initialization complete
   - [ ] Errors handled gracefully
   - [ ] Plugin usable after load
 
-#### 8.2 onUnload Hook Implementation
+#### 8.2 Shutdown Hook Implementation
 - **ID**: `PLG-027`
 - **Status**: `done`
 - **Priority**: P1
 - **Notes**: 
-  - Called when plugin unloads
+  - Use `api.on("gateway_stop")` for cleanup
   - Cleanup:
-    - Unregister webhook route (if possible)
+    - Stop dedupe cleanup timer
     - Close any connections
     - Clear caches
 - **Acceptance Criteria**:
@@ -537,7 +528,7 @@
   - Test talk_to_agent with mock client
   - Test all result types
   - Test error handling
-  - Test routing selection + encryption metadata
+  - Test routing selection + idempotency key handling
 - **Acceptance Criteria**:
   - [ ] Tool execution tested
   - [ ] All response types tested
@@ -549,12 +540,12 @@
 - **Notes**: 
   - Test with valid signature
   - Test with invalid signature
-  - Test agent triggering
+  - Test agent trigger logging
   - Use test server
-  - Test de-dupe and decryption path
+  - Test de-dupe and inbound policy path
 - **Acceptance Criteria**:
   - [ ] Full webhook flow tested
-  - [ ] Agent run triggered
+  - [ ] Agent trigger invoked
 
 #### 9.6 E2E Test: Full Message Exchange
 - **ID**: `PLG-034`
