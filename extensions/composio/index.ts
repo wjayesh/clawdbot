@@ -6,6 +6,8 @@ import { createComposioSearchTool } from "./src/tools/search.js";
 import { createComposioExecuteTool } from "./src/tools/execute.js";
 import { createComposioMultiExecuteTool } from "./src/tools/multi-execute.js";
 import { createComposioConnectionsTool } from "./src/tools/connections.js";
+import { createComposioWorkbenchTool } from "./src/tools/workbench.js";
+import { createCompositoBashTool } from "./src/tools/bash.js";
 import { registerComposioCli } from "./src/cli.js";
 
 /**
@@ -89,6 +91,20 @@ const composioPlugin = {
       },
     });
 
+    api.registerTool({
+      ...createComposioWorkbenchTool(ensureClient(), config),
+      execute: async (toolCallId, params) => {
+        return createComposioWorkbenchTool(ensureClient(), config).execute(toolCallId, params);
+      },
+    });
+
+    api.registerTool({
+      ...createCompositoBashTool(ensureClient(), config),
+      execute: async (toolCallId, params) => {
+        return createCompositoBashTool(ensureClient(), config).execute(toolCallId, params);
+      },
+    });
+
     // Register CLI commands
     api.registerCli(
       ({ program }) =>
@@ -115,16 +131,19 @@ You have access to Composio Tool Router, which provides 1000+ third-party integr
 
 3. **Execute tools**: Use \`composio_execute_tool\` with the tool_slug from search results and arguments matching the tool's schema. For multiple operations, use \`composio_multi_execute\` to run up to 50 tools in parallel.
 
+4. **Remote processing**: For large responses or bulk operations, use \`composio_workbench\` to run Python code in a remote Jupyter sandbox with helpers like run_composio_tool(), invoke_llm(), etc. Use \`composio_bash\` for shell commands in the remote sandbox.
+
 ## Important notes
 - Tool slugs are uppercase (e.g., GMAIL_SEND_EMAIL, GITHUB_CREATE_ISSUE)
 - Always use exact tool_slug values from search results - do not invent slugs
 - Check the parameters schema from search results before executing
 - If a tool fails with auth errors, prompt the user to connect the toolkit
+- Use workbench/bash tools when processing data stored in remote files or scripting bulk operations
 </composio-tools>`,
       };
     });
 
-    api.logger.info("[composio] Plugin registered with 4 tools and CLI commands");
+    api.logger.info("[composio] Plugin registered with 6 tools and CLI commands");
   },
 };
 
