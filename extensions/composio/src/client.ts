@@ -50,7 +50,7 @@ export class ComposioClient {
   }
 
   /**
-   * Search for tools matching a query
+   * Search for tools matching a query using Composio Tool Router semantic search
    */
   async searchTools(
     query: string,
@@ -61,45 +61,75 @@ export class ComposioClient {
     }
   ): Promise<ToolSearchResult[]> {
     const userId = this.getUserId(options?.userId);
-    const limit = options?.limit ?? 10;
 
     try {
-      // Filter toolkits based on config
-      let toolkits = options?.toolkits;
-      if (toolkits) {
-        toolkits = toolkits.filter((t) => this.isToolkitAllowed(t));
+      // Execute COMPOSIO_SEARCH_TOOLS meta-tool for semantic search
+      const response = await this.client.client.tools.execute("COMPOSIO_SEARCH_TOOLS", {
+        arguments: {
+          queries: [{ use_case: query }],
+          session: { generate_id: true },
+        },
+      } as Record<string, unknown>);
+
+      const data = (response as { data?: Record<string, unknown> })?.data;
+      if (!data) {
+        return [];
       }
 
-      // Pass search query to API - at least one of tools/toolkits/search is required
-      const tools = await this.client.tools.get(userId, {
-        search: query,
-        ...(toolkits && toolkits.length > 0 ? { toolkits } : {}),
-      });
+      // Extract results from the semantic search response
+      const searchResults = (data.results as Array<{
+        primary_tool_slugs?: string[];
+        related_tool_slugs?: string[];
+        toolkits?: string[];
+      }>) || [];
 
-      // Filter and map results - API returns OpenAI function calling format
+      const toolSchemas = (data.tool_schemas as Record<string, {
+        toolkit?: string;
+        tool_slug?: string;
+        description?: string;
+        input_schema?: Record<string, unknown>;
+      }>) || {};
+
+      // Build results from primary and related tools
       const results: ToolSearchResult[] = [];
-      for (const tool of tools) {
-        // Handle OpenAI function format: { type: "function", function: { name, description, parameters } }
-        const fn = (tool as { function?: { name?: string; description?: string; parameters?: Record<string, unknown> } }).function;
-        const name = fn?.name || (tool as { name?: string }).name || "";
-        const description = fn?.description || (tool as { description?: string }).description || "";
-        const parameters = fn?.parameters || (tool as { parameters?: Record<string, unknown> }).parameters || {};
+      const seenSlugs = new Set<string>();
 
-        // Extract toolkit from tool name (format: TOOLKIT_ACTION or _TOOLKIT_ACTION)
-        const parts = name.replace(/^_/, "").split("_");
-        const toolkit = parts[0] || "";
+      for (const result of searchResults) {
+        // Add primary tools first
+        const allSlugs = [
+          ...(result.primary_tool_slugs || []),
+          ...(result.related_tool_slugs || []),
+        ];
 
-        if (!this.isToolkitAllowed(toolkit)) continue;
+        for (const slug of allSlugs) {
+          if (seenSlugs.has(slug)) continue;
+          seenSlugs.add(slug);
 
-        results.push({
-          name,
-          slug: name,
-          description,
-          toolkit,
-          parameters,
-        });
+          const schema = toolSchemas[slug];
+          const toolkit = schema?.toolkit || slug.split("_")[0] || "";
 
-        if (results.length >= limit) break;
+          // Filter by allowed toolkits
+          if (!this.isToolkitAllowed(toolkit)) continue;
+
+          // Filter by requested toolkits if specified
+          if (options?.toolkits && options.toolkits.length > 0) {
+            if (!options.toolkits.some(t => t.toLowerCase() === toolkit.toLowerCase())) {
+              continue;
+            }
+          }
+
+          results.push({
+            name: slug,
+            slug: slug,
+            description: schema?.description || "",
+            toolkit: toolkit,
+            parameters: schema?.input_schema || {},
+          });
+
+          if (options?.limit && results.length >= options.limit) break;
+        }
+
+        if (options?.limit && results.length >= options.limit) break;
       }
 
       return results;
