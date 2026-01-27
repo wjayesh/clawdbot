@@ -198,7 +198,7 @@ export class ComposioClient {
 
     try {
       const response = await this.executeMetaTool("COMPOSIO_MULTI_EXECUTE_TOOL", {
-        tools: [{ slug: toolSlug, arguments: args }],
+        tools: [{ tool_slug: toolSlug, arguments: args }],
         session: { id: session.sessionId },
         sync_response_to_workbench: false,
       });
@@ -209,9 +209,12 @@ export class ComposioClient {
 
       const results = (response.data?.results as Array<{
         tool_slug: string;
-        successful: boolean;
-        data?: unknown;
-        error?: string;
+        index: number;
+        response: {
+          successful: boolean;
+          data?: unknown;
+          error?: string | null;
+        };
       }>) || [];
 
       const result = results[0];
@@ -219,10 +222,12 @@ export class ComposioClient {
         return { success: false, error: "No result returned" };
       }
 
+      // Response data is nested under result.response
+      const toolResponse = result.response;
       return {
-        success: result.successful,
-        data: result.data,
-        error: result.error,
+        success: toolResponse.successful,
+        data: toolResponse.data,
+        error: toolResponse.error ?? undefined,
       };
     } catch (err) {
       return {
@@ -257,7 +262,7 @@ export class ComposioClient {
     try {
       const response = await this.executeMetaTool("COMPOSIO_MULTI_EXECUTE_TOOL", {
         tools: allowedExecutions.map(exec => ({
-          slug: exec.tool_slug,
+          tool_slug: exec.tool_slug,
           arguments: exec.arguments,
         })),
         session: { id: session.sessionId },
@@ -276,17 +281,20 @@ export class ComposioClient {
 
       const apiResults = (response.data?.results as Array<{
         tool_slug: string;
-        successful: boolean;
-        data?: unknown;
-        error?: string;
+        index: number;
+        response: {
+          successful: boolean;
+          data?: unknown;
+          error?: string | null;
+        };
       }>) || [];
 
       return {
         results: apiResults.map(r => ({
           tool_slug: r.tool_slug,
-          success: r.successful,
-          data: r.data,
-          error: r.error,
+          success: r.response.successful,
+          data: r.response.data,
+          error: r.response.error ?? undefined,
         })),
       };
     } catch (err) {
@@ -368,8 +376,8 @@ export class ComposioClient {
 
     try {
       const session = await this.getSession(uid);
-      const result = await session.authorize(toolkit);
-      return { authUrl: result.url };
+      const result = await session.authorize(toolkit) as { redirectUrl?: string; url?: string };
+      return { authUrl: result.redirectUrl || result.url || "" };
     } catch (err) {
       return {
         error: err instanceof Error ? err.message : String(err),
