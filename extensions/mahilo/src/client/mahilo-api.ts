@@ -1,0 +1,193 @@
+/**
+ * Mahilo Registry API Client
+ */
+
+import type {
+  AgentConnection,
+  Friend,
+  MahiloPluginConfig,
+  RegisterAgentRequest,
+  RegisterAgentResponse,
+  SendMessageRequest,
+  SendMessageResponse,
+} from "../types.js";
+import { ErrorCodes, MahiloError } from "../types.js";
+
+const DEFAULT_TIMEOUT = 30_000;
+const MAX_RETRIES = 3;
+
+interface MahiloClientOptions {
+  apiKey: string;
+  baseUrl: string;
+  timeout?: number;
+}
+
+export class MahiloClient {
+  private apiKey: string;
+  private baseUrl: string;
+  private timeout: number;
+
+  constructor(options: MahiloClientOptions) {
+    this.apiKey = options.apiKey;
+    this.baseUrl = options.baseUrl.replace(/\/$/, ""); // Remove trailing slash
+    this.timeout = options.timeout ?? DEFAULT_TIMEOUT;
+  }
+
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    retries = MAX_RETRIES,
+  ): Promise<T> {
+    const url = `${this.baseUrl}${path}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const error = await this.parseErrorResponse(response);
+        // Don't retry client errors (4xx)
+        if (response.status >= 400 && response.status < 500) {
+          throw error;
+        }
+        // Retry server errors
+        if (retries > 0) {
+          await this.sleep(Math.pow(2, MAX_RETRIES - retries) * 100);
+          return this.request<T>(method, path, body, retries - 1);
+        }
+        throw error;
+      }
+
+      return (await response.json()) as T;
+    } catch (err) {
+      clearTimeout(timeoutId);
+
+      if (err instanceof MahiloError) {
+        throw err;
+      }
+
+      if (err instanceof Error) {
+        if (err.name === "AbortError") {
+          throw new MahiloError("Request timed out", ErrorCodes.TIMEOUT);
+        }
+        throw new MahiloError(err.message, ErrorCodes.NETWORK_ERROR);
+      }
+
+      throw new MahiloError("Unknown error", ErrorCodes.NETWORK_ERROR);
+    }
+  }
+
+  private async parseErrorResponse(response: Response): Promise<MahiloError> {
+    try {
+      const body = (await response.json()) as { error?: string; code?: string };
+      const code = body.code ?? this.statusToErrorCode(response.status);
+      return new MahiloError(body.error ?? response.statusText, code, response.status);
+    } catch {
+      return new MahiloError(
+        response.statusText,
+        this.statusToErrorCode(response.status),
+        response.status,
+      );
+    }
+  }
+
+  private statusToErrorCode(status: number): string {
+    switch (status) {
+      case 401:
+        return ErrorCodes.INVALID_API_KEY;
+      case 403:
+        return ErrorCodes.NOT_FRIENDS;
+      case 404:
+        return ErrorCodes.USER_NOT_FOUND;
+      case 429:
+        return ErrorCodes.RATE_LIMITED;
+      default:
+        return ErrorCodes.NETWORK_ERROR;
+    }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // =========================================================================
+  // Agent Connection Methods
+  // =========================================================================
+
+  async registerAgent(request: RegisterAgentRequest): Promise<RegisterAgentResponse> {
+    return this.request<RegisterAgentResponse>("POST", "/agents", request);
+  }
+
+  async getAgentConnections(): Promise<AgentConnection[]> {
+    return this.request<AgentConnection[]>("GET", "/agents");
+  }
+
+  async deleteAgentConnection(connectionId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>("DELETE", `/agents/${connectionId}`);
+  }
+
+  // =========================================================================
+  // Friends Methods
+  // =========================================================================
+
+  async getFriends(status?: "pending" | "accepted" | "blocked"): Promise<Friend[]> {
+    const query = status ? `?status=${status}` : "";
+    return this.request<Friend[]>("GET", `/friends${query}`);
+  }
+
+  async getContactConnections(username: string): Promise<AgentConnection[]> {
+    return this.request<AgentConnection[]>("GET", `/contacts/${username}/connections`);
+  }
+
+  async sendFriendRequest(username: string): Promise<{ friendship_id: string; status: string }> {
+    return this.request<{ friendship_id: string; status: string }>("POST", "/friends/request", {
+      username,
+    });
+  }
+
+  // =========================================================================
+  // Message Methods
+  // =========================================================================
+
+  async sendMessage(request: SendMessageRequest): Promise<SendMessageResponse> {
+    return this.request<SendMessageResponse>("POST", "/messages/send", request);
+  }
+}
+
+// Singleton client instance
+let clientInstance: MahiloClient | null = null;
+
+export function getMahiloClient(config: MahiloPluginConfig): MahiloClient {
+  if (!config.mahilo_api_key) {
+    throw new MahiloError(
+      "Mahilo API key not configured. Set mahilo_api_key in plugin config.",
+      ErrorCodes.INVALID_API_KEY,
+    );
+  }
+
+  // Create new instance if config changed
+  if (
+    !clientInstance ||
+    clientInstance["apiKey"] !== config.mahilo_api_key ||
+    clientInstance["baseUrl"] !== config.mahilo_api_url
+  ) {
+    clientInstance = new MahiloClient({
+      apiKey: config.mahilo_api_key,
+      baseUrl: config.mahilo_api_url ?? "https://api.mahilo.dev/api/v1",
+    });
+  }
+
+  return clientInstance;
+}
