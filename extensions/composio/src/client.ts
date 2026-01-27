@@ -458,6 +458,78 @@ export class ComposioClient {
     const session = await this.getSession(uid);
     return session.experimental.assistivePrompt;
   }
+
+  /**
+   * Execute Python code in the remote workbench using COMPOSIO_REMOTE_WORKBENCH
+   */
+  async executeWorkbench(
+    code: string,
+    options?: {
+      thought?: string;
+      currentStep?: string;
+      currentStepMetric?: string;
+      userId?: string;
+    }
+  ): Promise<{ success: boolean; output?: unknown; error?: string }> {
+    const uid = this.getUserId(options?.userId);
+    const session = await this.getSession(uid);
+
+    try {
+      const response = await this.executeMetaTool("COMPOSIO_REMOTE_WORKBENCH", {
+        code_to_execute: code,
+        session_id: session.sessionId,
+        ...(options?.thought ? { thought: options.thought } : {}),
+        ...(options?.currentStep ? { current_step: options.currentStep } : {}),
+        ...(options?.currentStepMetric ? { current_step_metric: options.currentStepMetric } : {}),
+      });
+
+      if (!response.successful) {
+        return { success: false, error: response.error || "Workbench execution failed" };
+      }
+
+      return {
+        success: true,
+        output: response.data,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  /**
+   * Execute bash commands in the remote sandbox using COMPOSIO_REMOTE_BASH_TOOL
+   */
+  async executeBash(
+    command: string,
+    userId?: string
+  ): Promise<{ success: boolean; output?: unknown; error?: string }> {
+    const uid = this.getUserId(userId);
+    const session = await this.getSession(uid);
+
+    try {
+      const response = await this.executeMetaTool("COMPOSIO_REMOTE_BASH_TOOL", {
+        command,
+        session_id: session.sessionId,
+      });
+
+      if (!response.successful) {
+        return { success: false, error: response.error || "Bash execution failed" };
+      }
+
+      return {
+        success: true,
+        output: response.data,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
 }
 
 /**
