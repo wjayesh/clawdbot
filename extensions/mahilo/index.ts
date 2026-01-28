@@ -11,23 +11,25 @@
  * - Local policy enforcement: Privacy-preserving message filtering
  */
 
-import type { MoltbotPluginApi } from "clawdbot/plugin-sdk";
+import type { MoltbotPluginApi, MoltbotPluginServiceContext } from "clawdbot/plugin-sdk";
 
+import { detectCallbackUrl } from "./src/callback-url.js";
 import { getMahiloClient } from "./src/client/mahilo-api.js";
-import { resolveConfig, validateConfig } from "./src/config.js";
+import { isEncryptionEnabled, resolveConfig, validateConfig } from "./src/config.js";
+import { getOrCreateMahiloKeypair } from "./src/keys.js";
+import { loadMahiloState, saveMahiloState } from "./src/state.js";
 import {
   createTalkToAgentTool,
   createTalkToGroupTool,
   createListContactsTool,
 } from "./src/tools/index.js";
+import type { MahiloPluginConfig } from "./src/types.js";
 import {
   createWebhookHandler,
   setCallbackSecret,
   startCleanup,
   stopCleanup,
 } from "./src/webhook/index.js";
-import type { MahiloPluginConfig } from "./src/types.js";
-import { getOrCreateMahiloKeypair } from "./src/keys.js";
 
 // Module-level state for service to access
 let pluginRuntime: MoltbotPluginApi["runtime"] | null = null;
@@ -87,7 +89,7 @@ const plugin = {
 
           // Determine port from config or callback_url_override
           const port = ctx.config?.gateway?.port ?? 18789;
-          await registerAgent(pluginConfig, port, pluginLogger!, pluginRuntime!);
+          await registerAgent(pluginConfig, port, pluginLogger!, pluginRuntime!, ctx);
         },
         stop: () => {
           stopCleanup();
@@ -100,29 +102,46 @@ const plugin = {
 
 /**
  * Register this agent with the Mahilo Registry.
+ * Uses persisted state to avoid unnecessary re-registrations.
+ * Detects public callback URL from config, tailscale, or localhost fallback.
  */
 async function registerAgent(
   config: MahiloPluginConfig,
   port: number,
   logger: { info: (msg: string) => void; warn: (msg: string) => void; error: (msg: string) => void },
   runtime: MoltbotPluginApi["runtime"],
+  serviceCtx?: MoltbotPluginServiceContext,
 ): Promise<void> {
   try {
+    // Detect callback URL using config, tailscale, or localhost fallback
+    const detection = await detectCallbackUrl({
+      config,
+      port,
+      gatewayConfig: serviceCtx?.config?.gateway,
+      logger,
+    });
+    const callbackUrl = detection.url;
+
+    // Check persisted state to see if we can skip re-registration
+    const persistedState = await loadMahiloState({ runtime });
+    if (
+      persistedState?.callback_secret &&
+      persistedState.registered_callback_url === callbackUrl
+    ) {
+      // Reuse existing registration
+      setCallbackSecret(persistedState.callback_secret);
+      logger.info(
+        `[Mahilo] Reusing existing registration. Connection ID: ${persistedState.connection_id ?? "unknown"}`,
+      );
+      return;
+    }
+
+    // Need to register (new or callback URL changed)
     const mahiloClient = getMahiloClient(config);
     const keypair = await getOrCreateMahiloKeypair({ runtime });
 
-    // Determine callback URL
-    let callbackUrl: string;
-    if (config.callback_url_override) {
-      callbackUrl = config.callback_url_override;
-    } else {
-      // For development, use localhost
-      // In production, this should be the public gateway URL
-      callbackUrl = `http://localhost:${port}${config.callback_path ?? "/mahilo/incoming"}`;
-      logger.warn(
-        `[Mahilo] Using localhost callback URL: ${callbackUrl}. Set callback_url_override for production.`,
-      );
-    }
+    // Determine if we should advertise encryption support
+    const supportsEncryption = isEncryptionEnabled(config);
 
     const response = await mahiloClient.registerAgent({
       framework: "clawdbot",
@@ -132,15 +151,31 @@ async function registerAgent(
       callback_url: callbackUrl,
       public_key: keypair.publicKey,
       public_key_alg: keypair.algorithm,
+      supports_encryption: supportsEncryption,
+      encryption_alg: supportsEncryption ? "x25519-xsalsa20-poly1305" : undefined,
     });
 
-    // Store the callback secret for signature verification
+    // Store the callback secret for signature verification (in memory)
     if (response.callback_secret) {
       setCallbackSecret(response.callback_secret);
     }
 
+    // Persist state for next startup
+    await saveMahiloState({
+      runtime,
+      state: {
+        callback_secret: response.callback_secret,
+        connection_id: response.connection_id,
+        registered_at: new Date().toISOString(),
+        registered_callback_url: callbackUrl,
+      },
+    });
+
+    const encryptionStatus = supportsEncryption
+      ? `encryption: ${config.encryption?.mode}`
+      : "encryption: off";
     logger.info(
-      `[Mahilo] Agent registered with Mahilo. Connection ID: ${response.connection_id}`,
+      `[Mahilo] Agent registered with Mahilo. Connection ID: ${response.connection_id} (${encryptionStatus})`,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -40,6 +40,30 @@ plugins:
 | `auto_register` | boolean | `true` | Register agent with Mahilo on startup |
 | `local_policies` | object | `{}` | Local outbound policy rules |
 | `inbound_policies` | object | `{}` | Local inbound policy rules |
+| `inbound_session_key` | string | `main` | Session key to route inbound Mahilo messages to |
+| `inbound_agent_id` | string | | Agent ID for inbound message routing |
+| `encryption.mode` | string | `off` | Encryption mode: `off`, `opportunistic`, or `required` |
+| `encryption.allow_plaintext_fallback` | boolean | `true` | Allow plaintext fallback when opportunistic encryption fails |
+
+### Encryption Configuration (Phase 2)
+
+Encryption is currently in Phase 2 development. When enabled, the plugin will advertise encryption support during registration:
+
+```yaml
+plugins:
+  entries:
+    mahilo:
+      enabled: true
+      config:
+        mahilo_api_key: "mhl_..."
+        encryption:
+          mode: opportunistic  # off, opportunistic, or required
+          allow_plaintext_fallback: true
+```
+
+- **off**: No encryption (default). Messages are sent in plaintext.
+- **opportunistic**: Encrypt when the recipient supports it; fall back to plaintext otherwise.
+- **required**: Always encrypt. Fails if the recipient doesn't support encryption.
 
 ### Policy Configuration
 
