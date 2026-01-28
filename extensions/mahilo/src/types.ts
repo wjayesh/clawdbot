@@ -30,6 +30,10 @@ export interface MahiloPluginConfig {
   auto_register?: boolean;
   local_policies?: LocalPolicyConfig;
   inbound_policies?: InboundPolicyConfig;
+  /** Session key to route inbound Mahilo messages to. Defaults to "main". */
+  inbound_session_key?: string;
+  /** Agent ID for inbound message routing. If not set, uses default agent. */
+  inbound_agent_id?: string;
 }
 
 // =============================================================================

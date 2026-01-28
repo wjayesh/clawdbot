@@ -5,12 +5,13 @@
 import type { MahiloPluginConfig } from "./types.js";
 
 export const DEFAULT_CONFIG: Required<
-  Pick<MahiloPluginConfig, "mahilo_api_url" | "callback_path" | "connection_label" | "auto_register">
+  Pick<MahiloPluginConfig, "mahilo_api_url" | "callback_path" | "connection_label" | "auto_register" | "inbound_session_key">
 > = {
   mahilo_api_url: "https://api.mahilo.dev/api/v1",
   callback_path: "/mahilo/incoming",
   connection_label: "default",
   auto_register: true,
+  inbound_session_key: "main",
 };
 
 export function resolveConfig(pluginConfig: Record<string, unknown> | undefined): MahiloPluginConfig {
@@ -26,6 +27,8 @@ export function resolveConfig(pluginConfig: Record<string, unknown> | undefined)
     auto_register: cfg.auto_register ?? DEFAULT_CONFIG.auto_register,
     local_policies: cfg.local_policies ?? {},
     inbound_policies: cfg.inbound_policies ?? {},
+    inbound_session_key: cfg.inbound_session_key ?? DEFAULT_CONFIG.inbound_session_key,
+    inbound_agent_id: cfg.inbound_agent_id,
   };
 }
 
