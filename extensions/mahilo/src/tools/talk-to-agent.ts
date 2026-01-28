@@ -9,7 +9,8 @@ import { Type } from "@sinclair/typebox";
 import { getMahiloClient } from "../client/mahilo-api.js";
 import { resolveConfig } from "../config.js";
 import { applyLocalPolicies } from "../policy/local-filter.js";
-import type { AgentConnection, MahiloPluginConfig } from "../types.js";
+import { evaluatePolicies, type LlmPolicyEvaluatorConfig } from "../policy/llm-evaluator.js";
+import type { AgentConnection } from "../types.js";
 import { ErrorCodes, MahiloError } from "../types.js";
 
 import type { MoltbotPluginApi } from "clawdbot/plugin-sdk";
@@ -149,7 +150,42 @@ Parameters:
         return formatResult(`Message blocked by local policy: ${policyResult.reason}`);
       }
 
-      // 4. Resolve recipient connections and select target
+      // 4. Apply LLM policy filters (if enabled)
+      if (config.llm_policies?.enabled) {
+        try {
+          // Fetch applicable policies for this recipient (outbound + global + user-specific)
+          const policies = await mahiloClient.getApplicablePolicies({
+            direction: "outbound",
+            targetUser: recipient,
+          });
+
+          if (policies.length > 0) {
+            const evalConfig: LlmPolicyEvaluatorConfig = {
+              provider: config.llm_policies.provider,
+              model: config.llm_policies.model,
+              timeoutMs: config.llm_policies.timeout_ms ?? 15_000,
+            };
+
+            const llmResult = await evaluatePolicies(policies, message, context, evalConfig);
+            if (!llmResult.allowed) {
+              // Return clear message that doesn't leak policy details
+              return formatResult(
+                `Message blocked by content policy${llmResult.blocking_policy_name ? ` (${llmResult.blocking_policy_name})` : ""}. ` +
+                  `Please review your message and try again.`,
+              );
+            }
+          }
+        } catch (err) {
+          // Log but don't block on LLM policy errors (fail-open at integration level)
+          // Individual policies can still use fail_behavior: "closed"
+          console.warn(
+            "[Mahilo] LLM policy evaluation failed:",
+            err instanceof Error ? err.message : "Unknown error",
+          );
+        }
+      }
+
+      // 5. Resolve recipient connections and select target
       let recipientConnectionId: string | undefined;
       try {
         const connections = await mahiloClient.getContactConnections(recipient);
@@ -170,7 +206,7 @@ Parameters:
         }
       }
 
-      // 5. Send message
+      // 6. Send message
       try {
         const response = await mahiloClient.sendMessage({
           recipient,
@@ -180,7 +216,7 @@ Parameters:
           idempotency_key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         });
 
-        // 6. Format result based on status
+        // 7. Format result based on status
         switch (response.status) {
           case "delivered":
             return formatResult(

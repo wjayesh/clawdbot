@@ -15,8 +15,16 @@ vi.mock("../src/client/mahilo-api.js", () => ({
   MahiloClient: vi.fn(),
 }));
 
-// Import the mock after setting it up
+// Mock the LLM evaluator module
+vi.mock("../src/policy/llm-evaluator.js", () => ({
+  evaluatePolicies: vi.fn(),
+  evaluatePolicy: vi.fn(),
+  createLlmPolicyEvaluator: vi.fn(),
+}));
+
+// Import the mocks after setting them up
 import { getMahiloClient } from "../src/client/mahilo-api.js";
+import { evaluatePolicies } from "../src/policy/llm-evaluator.js";
 import { MahiloError, ErrorCodes } from "../src/types.js";
 
 // Create a mock plugin API
@@ -57,6 +65,7 @@ function createMockClient(overrides: Record<string, any> = {}) {
     sendMessage: vi.fn().mockResolvedValue({ message_id: "msg_123", status: "delivered" }),
     getFriends: vi.fn().mockResolvedValue([]),
     getContactConnections: vi.fn().mockResolvedValue([]),
+    getApplicablePolicies: vi.fn().mockResolvedValue([]),
     registerAgent: vi.fn().mockResolvedValue({ connection_id: "c1", callback_secret: "s" }),
     ...overrides,
   };
@@ -325,6 +334,182 @@ describe("talk_to_agent Tool", () => {
     });
   });
 
+  describe("LLM policy enforcement", () => {
+    it("should call LLM policy evaluation when enabled", async () => {
+      const api = createMockApi({
+        llm_policies: {
+          enabled: true,
+          provider: "anthropic",
+          model: "claude-3-haiku",
+        },
+      });
+      const toolWithLlm = createTalkToAgentTool(api);
+
+      mockClient.getApplicablePolicies.mockResolvedValueOnce([
+        {
+          id: "policy_1",
+          name: "No Spam",
+          policy_content: "Block spam messages",
+          scope: "global",
+          direction: "outbound",
+          priority: 100,
+          enabled: true,
+        },
+      ]);
+
+      (evaluatePolicies as any).mockResolvedValueOnce({ allowed: true });
+
+      await toolWithLlm.execute("tool_1", {
+        recipient: "alice",
+        message: "Hello!",
+      });
+
+      expect(mockClient.getApplicablePolicies).toHaveBeenCalledWith({
+        direction: "outbound",
+        targetUser: "alice",
+      });
+      expect(evaluatePolicies).toHaveBeenCalled();
+    });
+
+    it("should block message when LLM policy rejects", async () => {
+      const api = createMockApi({
+        llm_policies: {
+          enabled: true,
+        },
+      });
+      const toolWithLlm = createTalkToAgentTool(api);
+
+      mockClient.getApplicablePolicies.mockResolvedValueOnce([
+        {
+          id: "policy_1",
+          name: "No Profanity",
+          policy_content: "Block profane messages",
+          scope: "global",
+          direction: "outbound",
+          priority: 100,
+          enabled: true,
+        },
+      ]);
+
+      (evaluatePolicies as any).mockResolvedValueOnce({
+        allowed: false,
+        reason: "Contains inappropriate language",
+        blocking_policy_name: "No Profanity",
+      });
+
+      const result = await toolWithLlm.execute("tool_1", {
+        recipient: "alice",
+        message: "Some bad message",
+      });
+
+      expect(result.content[0].text).toContain("blocked by content policy");
+      expect(result.content[0].text).toContain("No Profanity");
+      expect(mockClient.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it("should skip LLM evaluation when disabled", async () => {
+      const api = createMockApi({
+        llm_policies: {
+          enabled: false,
+        },
+      });
+      const toolWithLlm = createTalkToAgentTool(api);
+
+      await toolWithLlm.execute("tool_1", {
+        recipient: "alice",
+        message: "Hello!",
+      });
+
+      expect(mockClient.getApplicablePolicies).not.toHaveBeenCalled();
+      expect(evaluatePolicies).not.toHaveBeenCalled();
+    });
+
+    it("should skip LLM evaluation when no policies apply", async () => {
+      const api = createMockApi({
+        llm_policies: {
+          enabled: true,
+        },
+      });
+      const toolWithLlm = createTalkToAgentTool(api);
+
+      mockClient.getApplicablePolicies.mockResolvedValueOnce([]);
+
+      await toolWithLlm.execute("tool_1", {
+        recipient: "alice",
+        message: "Hello!",
+      });
+
+      expect(mockClient.getApplicablePolicies).toHaveBeenCalled();
+      expect(evaluatePolicies).not.toHaveBeenCalled();
+      expect(mockClient.sendMessage).toHaveBeenCalled();
+    });
+
+    it("should continue on LLM evaluation error (fail-open)", async () => {
+      const api = createMockApi({
+        llm_policies: {
+          enabled: true,
+        },
+      });
+      const toolWithLlm = createTalkToAgentTool(api);
+
+      mockClient.getApplicablePolicies.mockResolvedValueOnce([
+        {
+          id: "policy_1",
+          name: "Test Policy",
+          policy_content: "Test",
+          scope: "global",
+          direction: "outbound",
+          priority: 100,
+          enabled: true,
+        },
+      ]);
+
+      (evaluatePolicies as any).mockRejectedValueOnce(new Error("LLM service unavailable"));
+
+      await toolWithLlm.execute("tool_1", {
+        recipient: "alice",
+        message: "Hello!",
+      });
+
+      // Should still send the message despite LLM error
+      expect(mockClient.sendMessage).toHaveBeenCalled();
+    });
+
+    it("should use configured timeout for LLM evaluation", async () => {
+      const api = createMockApi({
+        llm_policies: {
+          enabled: true,
+          timeout_ms: 30000,
+        },
+      });
+      const toolWithLlm = createTalkToAgentTool(api);
+
+      mockClient.getApplicablePolicies.mockResolvedValueOnce([
+        {
+          id: "policy_1",
+          name: "Test",
+          policy_content: "Test",
+          scope: "global",
+          direction: "outbound",
+          priority: 100,
+          enabled: true,
+        },
+      ]);
+
+      (evaluatePolicies as any).mockResolvedValueOnce({ allowed: true });
+
+      await toolWithLlm.execute("tool_1", {
+        recipient: "alice",
+        message: "Hello!",
+      });
+
+      // Verify the config passed to evaluatePolicies includes the timeout
+      expect(evaluatePolicies).toHaveBeenCalled();
+      const lastCall = (evaluatePolicies as any).mock.calls[0];
+      expect(lastCall[3]).toHaveProperty("timeoutMs", 30000);
+    });
+  });
+
   describe("error handling", () => {
     it("should handle NOT_FRIENDS error", async () => {
       mockClient.sendMessage.mockRejectedValueOnce(
@@ -534,6 +719,78 @@ describe("talk_to_group Tool", () => {
       });
 
       expect(result.content[0].text).toContain("blocked by local policy");
+      expect(mockClient.sendMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("LLM policy enforcement", () => {
+    it("should call LLM policy evaluation for groups when enabled", async () => {
+      const api = createMockApi({
+        llm_policies: {
+          enabled: true,
+        },
+      });
+      const toolWithLlm = createTalkToGroupTool(api);
+
+      mockClient.getApplicablePolicies.mockResolvedValueOnce([
+        {
+          id: "policy_1",
+          name: "Group Content Policy",
+          policy_content: "Block inappropriate content",
+          scope: "group",
+          direction: "outbound",
+          priority: 100,
+          target_group: "group_123",
+          enabled: true,
+        },
+      ]);
+
+      (evaluatePolicies as any).mockResolvedValueOnce({ allowed: true });
+
+      await toolWithLlm.execute("tool_1", {
+        group_id: "group_123",
+        message: "Hello group!",
+      });
+
+      expect(mockClient.getApplicablePolicies).toHaveBeenCalledWith({
+        direction: "outbound",
+        targetGroup: "group_123",
+      });
+      expect(evaluatePolicies).toHaveBeenCalled();
+    });
+
+    it("should block group message when LLM policy rejects", async () => {
+      const api = createMockApi({
+        llm_policies: {
+          enabled: true,
+        },
+      });
+      const toolWithLlm = createTalkToGroupTool(api);
+
+      mockClient.getApplicablePolicies.mockResolvedValueOnce([
+        {
+          id: "policy_1",
+          name: "No Spam",
+          policy_content: "Block spam",
+          scope: "global",
+          direction: "outbound",
+          priority: 100,
+          enabled: true,
+        },
+      ]);
+
+      (evaluatePolicies as any).mockResolvedValueOnce({
+        allowed: false,
+        reason: "Looks like spam",
+        blocking_policy_name: "No Spam",
+      });
+
+      const result = await toolWithLlm.execute("tool_1", {
+        group_id: "group_123",
+        message: "Buy now!!!",
+      });
+
+      expect(result.content[0].text).toContain("blocked by content policy");
       expect(mockClient.sendMessage).not.toHaveBeenCalled();
     });
   });
