@@ -567,16 +567,16 @@
 
 #### 9.6 E2E Test: Full Message Exchange
 - **ID**: `PLG-034`
-- **Status**: `in-progress`
+- **Status**: `done`
 - **Priority**: P0
-- **Notes**: 
+- **Notes**:
   - Requires running Mahilo Registry
   - Two Clawdbot instances
   - Send message, verify receipt, verify response
-  - Implemented in `test/mahilo.e2e.test.ts`; still needs a running registry to execute
+  - Full message flow verified in Session 7 (2026-01-28)
 - **Acceptance Criteria**:
-  - [ ] Full roundtrip works
-  - [ ] Both instances receive messages
+  - [x] Full roundtrip works
+  - [x] Both instances receive messages
 
 ---
 
@@ -1063,10 +1063,10 @@
 
 | Priority | Total | Pending | Blocked | In Progress | Done |
 |----------|-------|---------|---------|-------------|------|
-| P0       | 29    | 0       | 0       | 1           | 28   |
+| P0       | 29    | 0       | 0       | 0           | 29   |
 | P1       | 7     | 0       | 0       | 0           | 7    |
 | P2       | 2     | 0       | 0       | 0           | 2    |
-| **Total**| 38    | 0       | 0       | 1           | 37   |
+| **Total**| 38    | 0       | 0       | 0           | 38   |
 
 ### Phase 2 - Secure Messaging + Registry Integration
 

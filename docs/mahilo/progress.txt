@@ -8,7 +8,7 @@ Last Updated: 2026-01-28
 ## Current Status
 
 **Phase 1**: 38/38 tasks complete (100%) ✅
-**Phase 2**: 6/32 tasks complete (19%) - 4 pending (LLM policies), 22 blocked on registry
+**Phase 2**: 7/32 tasks complete (22%) - 20 pending, 5 blocked on registry encryption spec
 
 ## What Works Today
 
@@ -51,14 +51,15 @@ The full message exchange loop is complete:
 - PLG-067: Fetch LLM Policies from Registry
 - PLG-068: LLM Policy Evaluation Engine
 
-**Pending (registry already supports)**:
-- Group messaging (PLG-046-051)
-- Policy sync (PLG-052-056)
-- Trusted routing (PLG-057-059)
-- Secret rotation (PLG-065-066)
+**Pending (registry already supports these)**:
+- LLM policies (PLG-067-070) - registry stores, plugin evaluates locally
+- Group messaging (PLG-046-051) - registry has full group support
+- Policy sync (PLG-052-056) - registry has policy CRUD
+- Trusted routing (PLG-057-059) - registry does routing by default
+- Secret rotation (PLG-065-066) - registry has `rotate_secret: true`
 
-**Blocked (needs registry spec)**:
-- E2E encryption (PLG-039-045)
+**Blocked (needs registry encryption spec)**:
+- E2E encryption (PLG-039-042, PLG-044-045)
 
 ---
 
@@ -124,7 +125,7 @@ The full message exchange loop is complete:
 - ✅ PLG-036: Tool documentation
 - ✅ PLG-037: Agent instructions template
 
-### Phase 2 (6 Complete, 22 Blocked)
+### Phase 2 (7 Complete, 20 Pending, 5 Blocked)
 
 #### Completed
 - ✅ PLG-060: Agent runner integration (callGateway)
@@ -134,12 +135,15 @@ The full message exchange loop is complete:
 - ✅ PLG-063: Callback URL auto-detection (tailscale support)
 - ✅ PLG-064: Persist callback_secret
 
-#### Blocked (waiting on registry features)
-- PLG-039 to PLG-045: E2E encryption (needs registry spec)
-- PLG-046 to PLG-051: Group messaging client updates
-- PLG-052 to PLG-056: Registry policy sync
-- PLG-057 to PLG-059: Trusted routing
-- PLG-065 to PLG-066: Callback secret rotation
+#### Pending (registry already supports these - just need plugin implementation)
+- PLG-067 to PLG-070: LLM policy enforcement (P0/P1)
+- PLG-046 to PLG-051: Group messaging (P1/P2)
+- PLG-052 to PLG-056: Registry policy sync (P1/P2)
+- PLG-057 to PLG-059: Trusted routing (P2)
+- PLG-065 to PLG-066: Callback secret rotation (P2)
+
+#### Blocked (waiting on registry encryption spec)
+- PLG-039 to PLG-042, PLG-044-045: E2E encryption
 
 ---
 
