@@ -1,7 +1,7 @@
 /**
  * list_mahilo_contacts Tool
  *
- * Lists friends and groups on Mahilo that you can message.
+ * Lists friends on Mahilo that you can message.
  */
 
 import { Type } from "@sinclair/typebox";
@@ -10,9 +10,9 @@ import { getMahiloClient } from "../client/mahilo-api.js";
 import { resolveConfig } from "../config.js";
 import { ErrorCodes, MahiloError } from "../types.js";
 
-import type { ClawdbotPluginApi } from "../../../../src/plugins/types.js";
+import type { MoltbotPluginApi } from "clawdbot/plugin-sdk";
 
-export function createListContactsTool(api: ClawdbotPluginApi) {
+export function createListContactsTool(api: MoltbotPluginApi) {
   return {
     name: "list_mahilo_contacts",
     description: `List your friends on Mahilo that you can message.

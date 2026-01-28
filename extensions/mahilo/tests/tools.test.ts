@@ -5,8 +5,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { createTalkToAgentTool } from "../src/tools/talk-to-agent.js";
+import { createTalkToGroupTool } from "../src/tools/talk-to-group.js";
 import { createListContactsTool } from "../src/tools/list-contacts.js";
-import type { ClawdbotPluginApi } from "../../../src/plugins/types.js";
+import type { MoltbotPluginApi } from "clawdbot/plugin-sdk";
 
 // Mock the Mahilo client module
 vi.mock("../src/client/mahilo-api.js", () => ({
@@ -19,7 +20,7 @@ import { getMahiloClient } from "../src/client/mahilo-api.js";
 import { MahiloError, ErrorCodes } from "../src/types.js";
 
 // Create a mock plugin API
-function createMockApi(pluginConfig: Record<string, unknown> = {}): ClawdbotPluginApi {
+function createMockApi(pluginConfig: Record<string, unknown> = {}): MoltbotPluginApi {
   return {
     id: "mahilo",
     name: "Mahilo",
@@ -64,7 +65,7 @@ function createMockClient(overrides: Record<string, any> = {}) {
 describe("talk_to_agent Tool", () => {
   let tool: ReturnType<typeof createTalkToAgentTool>;
   let mockClient: ReturnType<typeof createMockClient>;
-  let mockApi: ClawdbotPluginApi;
+  let mockApi: MoltbotPluginApi;
 
   beforeEach(() => {
     mockClient = createMockClient();
@@ -407,10 +408,196 @@ describe("talk_to_agent Tool", () => {
   });
 });
 
+describe("talk_to_group Tool", () => {
+  let tool: ReturnType<typeof createTalkToGroupTool>;
+  let mockClient: ReturnType<typeof createMockClient>;
+  let mockApi: MoltbotPluginApi;
+
+  beforeEach(() => {
+    mockClient = createMockClient();
+    (getMahiloClient as any).mockReturnValue(mockClient);
+    mockApi = createMockApi();
+    tool = createTalkToGroupTool(mockApi);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe("tool metadata", () => {
+    it("should have correct name", () => {
+      expect(tool.name).toBe("talk_to_group");
+    });
+
+    it("should have description", () => {
+      expect(tool.description).toContain("Mahilo group");
+    });
+  });
+
+  describe("successful sends", () => {
+    it("should send message to group", async () => {
+      const result = await tool.execute("tool_1", {
+        group_id: "group_123",
+        message: "Hello group!",
+      });
+
+      expect(result.content[0].text).toContain("Message sent to group group_123");
+      expect(mockClient.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipient: "group_123",
+          recipient_type: "group",
+          message: "Hello group!",
+        }),
+      );
+    });
+
+    it("should include context when provided", async () => {
+      await tool.execute("tool_1", {
+        group_id: "group_123",
+        message: "Hello group!",
+        context: "Sharing an update",
+      });
+
+      expect(mockClient.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: "Sharing an update",
+        }),
+      );
+    });
+
+    it("should handle pending status", async () => {
+      mockClient.sendMessage.mockResolvedValueOnce({
+        message_id: "msg_456",
+        status: "pending",
+      });
+
+      const result = await tool.execute("tool_1", {
+        group_id: "group_123",
+        message: "Hello group!",
+      });
+
+      expect(result.content[0].text).toContain("Message queued for group group_123");
+      expect(result.content[0].text).toContain("msg_456");
+    });
+
+    it("should handle rejected status", async () => {
+      mockClient.sendMessage.mockResolvedValueOnce({
+        message_id: "msg_789",
+        status: "rejected",
+        rejection_reason: "Policy violation",
+      });
+
+      const result = await tool.execute("tool_1", {
+        group_id: "group_123",
+        message: "Hello group!",
+      });
+
+      expect(result.content[0].text).toContain("Message rejected");
+      expect(result.content[0].text).toContain("Policy violation");
+    });
+  });
+
+  describe("input validation", () => {
+    it("should reject empty group id", async () => {
+      const result = await tool.execute("tool_1", {
+        group_id: "",
+        message: "Hello!",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Group id is required");
+    });
+
+    it("should reject empty message", async () => {
+      const result = await tool.execute("tool_1", {
+        group_id: "group_123",
+        message: "",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Message is required");
+    });
+  });
+
+  describe("policy enforcement", () => {
+    it("should reject messages blocked by keyword policy", async () => {
+      const api = createMockApi({
+        local_policies: {
+          blockedKeywords: ["password"],
+        },
+      });
+      const toolWithPolicy = createTalkToGroupTool(api);
+
+      const result = await toolWithPolicy.execute("tool_1", {
+        group_id: "group_123",
+        message: "My password is secret123",
+      });
+
+      expect(result.content[0].text).toContain("blocked by local policy");
+      expect(mockClient.sendMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("error handling", () => {
+    it("should handle GROUP_NOT_FOUND error", async () => {
+      mockClient.sendMessage.mockRejectedValueOnce(
+        new MahiloError("Group not found", ErrorCodes.GROUP_NOT_FOUND, 404),
+      );
+
+      const result = await tool.execute("tool_1", {
+        group_id: "missing-group",
+        message: "Hello!",
+      });
+
+      expect(result.content[0].text).toContain('group "missing-group" not found');
+    });
+
+    it("should handle NOT_GROUP_MEMBER error", async () => {
+      mockClient.sendMessage.mockRejectedValueOnce(
+        new MahiloError("Not a member", ErrorCodes.NOT_GROUP_MEMBER, 403),
+      );
+
+      const result = await tool.execute("tool_1", {
+        group_id: "group_123",
+        message: "Hello!",
+      });
+
+      expect(result.content[0].text).toContain("not a member of group");
+    });
+
+    it("should handle INVALID_API_KEY error", async () => {
+      mockClient.sendMessage.mockRejectedValueOnce(
+        new MahiloError("Invalid API key", ErrorCodes.INVALID_API_KEY, 401),
+      );
+
+      const result = await tool.execute("tool_1", {
+        group_id: "group_123",
+        message: "Hello!",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("API key");
+    });
+
+    it("should handle NOT_IMPLEMENTED error", async () => {
+      mockClient.sendMessage.mockRejectedValueOnce(
+        new MahiloError("Group messaging not supported", ErrorCodes.NOT_IMPLEMENTED, 501),
+      );
+
+      const result = await tool.execute("tool_1", {
+        group_id: "group_123",
+        message: "Hello!",
+      });
+
+      expect(result.content[0].text).toContain("Group messaging is not supported");
+    });
+  });
+});
+
 describe("list_mahilo_contacts Tool", () => {
   let tool: ReturnType<typeof createListContactsTool>;
   let mockClient: ReturnType<typeof createMockClient>;
-  let mockApi: ClawdbotPluginApi;
+  let mockApi: MoltbotPluginApi;
 
   beforeEach(() => {
     mockClient = createMockClient();

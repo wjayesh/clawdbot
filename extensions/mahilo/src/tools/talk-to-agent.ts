@@ -12,7 +12,7 @@ import { applyLocalPolicies } from "../policy/local-filter.js";
 import type { AgentConnection, MahiloPluginConfig } from "../types.js";
 import { ErrorCodes, MahiloError } from "../types.js";
 
-import type { ClawdbotPluginApi } from "../../../../src/plugins/types.js";
+import type { MoltbotPluginApi } from "clawdbot/plugin-sdk";
 
 /**
  * Select the best connection from available connections based on routing hints.
@@ -66,7 +66,7 @@ function selectConnection(
   return active[0] ?? null;
 }
 
-export function createTalkToAgentTool(api: ClawdbotPluginApi) {
+export function createTalkToAgentTool(api: MoltbotPluginApi) {
   return {
     name: "talk_to_agent",
     description: `Send a message to another user's agent through the Mahilo network.

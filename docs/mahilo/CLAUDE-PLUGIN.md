@@ -10,7 +10,7 @@ Implement the Mahilo Plugin based on the design document and task list. Work thr
 
 1. `docs/mahilo/plugin-design.md` - Full design specification
 2. `docs/mahilo/tasks-plugin.md` - Phase 1 tasks with IDs, priorities, and acceptance criteria
-3. `docs/mahilo/findings.md` - Design review findings that should be addressed
+3. `docs/mahilo/plugin-docs-findings.md` - Design review findings that should be addressed
 4. `docs/mahilo/progress-plugin.txt` - Track your progress here
 5. `extensions/discord/` - Reference plugin to follow patterns from
 
@@ -55,7 +55,7 @@ The plugin lives at `extensions/mahilo/` and should follow Clawdbot conventions:
 
 ```
 extensions/mahilo/
-├── clawdbot.plugin.json   # Plugin manifest
+├── moltbot.plugin.json    # Plugin manifest
 ├── package.json           # Dependencies
 ├── tsconfig.json          # TypeScript config
 ├── index.ts               # Plugin entry point (default export)
@@ -65,6 +65,7 @@ extensions/mahilo/
 │   │   └── mahilo-api.ts  # Mahilo API client
 │   ├── tools/
 │   │   ├── talk-to-agent.ts
+│   │   ├── talk-to-group.ts
 │   │   └── list-contacts.ts
 │   ├── webhook/
 │   │   ├── handler.ts     # Incoming message handler
@@ -87,16 +88,21 @@ Study these files for patterns:
 2. **Route Registration**: `api.registerHttpRoute` uses Node req/res; see `src/gateway/server/plugins-http.ts`
 3. **Tool Registration**: Tool factories use `execute(_id, params)`; see `extensions/llm-task/`
 4. **Agent Triggering**: No public plugin API yet; keep Phase 1 logging stub
-5. **Config System**: Config lives under `plugins.entries.<id>.config`; manifest schema in `clawdbot.plugin.json`
+5. **Config System**: Config lives under `plugins.entries.<id>.config`; manifest schema in `moltbot.plugin.json`
 
 ## Learnings
 
 - The manifest is for discovery and config validation only; tools, routes, and hooks are registered in code via the plugin API.
-- `clawdbot.plugin.json` must include `id` and `configSchema`, or the plugin fails validation.
-- Bundled plugins are disabled by default; enable via `plugins.entries.<id>.enabled` or `clawdbot plugins enable <id>`.
+- `moltbot.plugin.json` must include `id` and `configSchema`, or the plugin fails validation.
+- Legacy `clawdbot.plugin.json` still loads, but `moltbot.plugin.json` is the canonical filename.
+- Bundled plugins are disabled by default; set `plugins.entries.<id>.enabled: true` and ensure `plugins.enabled` is not false.
+- If `plugins.allow` is non-empty, the plugin id must be in the allowlist (and not in `plugins.deny`).
 - Plugin `register(api)` must be synchronous; if it returns a Promise, it is ignored.
 - `registerHttpRoute` matches paths only; parse raw bodies from the Node request stream and enforce HTTP methods inside the handler.
 - Tool handlers use `execute(_id, params)` and should return an `AgentToolResult` with `content`.
+- Tool factories should read config from `api.pluginConfig`; `execute` only receives `_id` and params.
+- Register optional tools with `{ optional: true }` so the plugin can load before keys are configured.
+- Mahilo registration requires `public_key` + `public_key_alg`; persist a keypair under the plugin state dir and reuse it on startup.
 
 ## Important Notes
 

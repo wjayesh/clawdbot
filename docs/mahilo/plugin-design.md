@@ -39,7 +39,7 @@ The Mahilo plugin adds inter-agent communication capabilities to Clawdbot:
 
 1. **Outbound**: Exposes `talk_to_agent` tool that agents can call to message other users
 2. **Inbound**: Provides a webhook endpoint that receives messages from Mahilo
-3. **Registration**: Connects to Mahilo registry on startup, registers callback URL + connection profile
+3. **Registration**: Connects to Mahilo registry on startup, registers callback URL + connection profile + public key
 4. **Routing**: Selects recipient agent connection using labels/capabilities (local selection)
 5. **Policies**: Applies local policy checks before sending messages
 
@@ -184,7 +184,7 @@ Mahilo Registry sends message to callback URL
 
 ```
 extensions/mahilo/
-├── clawdbot.plugin.json          # Plugin manifest
+├── moltbot.plugin.json           # Plugin manifest
 ├── package.json                   # Dependencies
 ├── index.ts                       # Plugin entry point
 ├── README.md                      # User documentation
@@ -200,6 +200,7 @@ extensions/mahilo/
     ├── tools/
     │   ├── index.ts               # Tool exports
     │   ├── talk-to-agent.ts       # Send message to a friend's agent
+    │   ├── talk-to-group.ts       # Send message to a Mahilo group
     │   └── list-contacts.ts       # List friends (optional)
     │
     ├── webhook/
@@ -301,6 +302,8 @@ extensions/mahilo/
 }
 ```
 
+The manifest file is named `moltbot.plugin.json` (legacy `clawdbot.plugin.json` still loads, but prefer the new name).
+
 The manifest is for discovery and config validation only. Tools, HTTP routes, hooks, and services are registered in code via the plugin API.
 
 ---
@@ -332,6 +335,7 @@ The schema does not hard-require this key so the plugin can load without crashin
 | `inbound_policies` | object | `{}` | Local inbound policy rules |
 
 E2E encryption and trusted routing are future enhancements and are not part of the Phase 1 plugin config.
+Mahilo registration requires a public key; the plugin generates and persists an ed25519 keypair under the Clawdbot state dir.
 
 ### Configuration Example
 
@@ -386,9 +390,9 @@ interface TalkToAgentInput {
 
 ```typescript
 import { Type } from "@sinclair/typebox";
-import type { ClawdbotPluginApi } from "clawdbot/plugin-sdk";
+import type { MoltbotPluginApi } from "clawdbot/plugin-sdk";
 
-export function createTalkToAgentTool(api: ClawdbotPluginApi) {
+export function createTalkToAgentTool(api: MoltbotPluginApi) {
   return {
     name: "talk_to_agent",
     description: `Send a message to another user's agent through the Mahilo network.
@@ -445,7 +449,7 @@ Parameters:
 ```typescript
 // src/tools/talk-to-agent.ts
 
-export function createTalkToAgentTool(api: ClawdbotPluginApi) {
+export function createTalkToAgentTool(api: MoltbotPluginApi) {
   return {
     name: "talk_to_agent",
     description: "...",
@@ -514,44 +518,53 @@ export function createTalkToAgentTool(api: ClawdbotPluginApi) {
 }
 ```
 
-### talk_to_group (Phase 2)
+### talk_to_group
 
-Phase 2 only; not implemented in Phase 1.
-
-Send a message to a group.
+Send a message to a Mahilo group (by id).
+Note: Mahilo Registry group messaging returns 501 today; surface a clear "not supported yet" message until Phase 2 adds group support.
 
 ```typescript
 import { Type } from "@sinclair/typebox";
+import type { MoltbotPluginApi } from "clawdbot/plugin-sdk";
 
-export const talkToGroupTool = {
-  name: "talk_to_group",
-  description: `Send a message to a group through the Mahilo network.
-
-Use this when you need to:
-- Share information with multiple users at once
-- Ask a question to a community
-- Broadcast updates to a group
+export function createTalkToGroupTool(api: MoltbotPluginApi) {
+  return {
+    name: "talk_to_group",
+    description: `Send a message to a Mahilo group.
 
 You must be a member of the group to send messages to it.`,
 
-  parameters: Type.Object({
-    group_id: Type.String({
-      description: "ID of the group to message",
-    }),
-    message: Type.String({
-      description: "The message to send",
-    }),
-    context: Type.Optional(
-      Type.String({
-        description: "Why you're sending this message",
+    parameters: Type.Object({
+      group_id: Type.String({
+        description: "Mahilo group id (not the group name)",
       }),
-    ),
-  }),
+      message: Type.String({
+        description: "The message to send",
+      }),
+      context: Type.Optional(
+        Type.String({
+          description: "Why you're sending this message",
+        }),
+      ),
+    }),
 
-  async execute(_id: string, params: Record<string, unknown>) {
-    // Similar to talk_to_agent but with recipient_type: "group"
-  }
-};
+    async execute(_id: string, params: Record<string, unknown>) {
+      const groupId = String(params.group_id ?? "").trim();
+      const message = String(params.message ?? "").trim();
+      const context = params.context ? String(params.context).trim() : undefined;
+      const mahiloClient = getMahiloClient(resolveConfig(api.pluginConfig));
+
+      const response = await mahiloClient.sendMessage({
+        recipient: groupId,
+        recipient_type: "group",
+        message,
+        context,
+      });
+      // Format response into AgentToolResult (delivered/pending/rejected)
+      return formatResult(`Message sent to group ${groupId}. Status: ${response.status}`);
+    },
+  };
+}
 ```
 
 ### list_mahilo_contacts (Optional Helper)
@@ -560,9 +573,9 @@ List available friends.
 
 ```typescript
 import { Type } from "@sinclair/typebox";
-import type { ClawdbotPluginApi } from "clawdbot/plugin-sdk";
+import type { MoltbotPluginApi } from "clawdbot/plugin-sdk";
 
-export function createListContactsTool(api: ClawdbotPluginApi) {
+export function createListContactsTool(api: MoltbotPluginApi) {
   return {
     name: "list_mahilo_contacts",
     description: "List your friends on Mahilo that you can message",

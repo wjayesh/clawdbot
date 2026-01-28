@@ -11,11 +11,15 @@
  * - Local policy enforcement: Privacy-preserving message filtering
  */
 
-import type { ClawdbotPluginApi } from "../../src/plugins/types.js";
+import type { MoltbotPluginApi } from "clawdbot/plugin-sdk";
 
 import { getMahiloClient } from "./src/client/mahilo-api.js";
 import { resolveConfig, validateConfig } from "./src/config.js";
-import { createTalkToAgentTool, createListContactsTool } from "./src/tools/index.js";
+import {
+  createTalkToAgentTool,
+  createTalkToGroupTool,
+  createListContactsTool,
+} from "./src/tools/index.js";
 import {
   createWebhookHandler,
   setCallbackSecret,
@@ -23,13 +27,14 @@ import {
   stopCleanup,
 } from "./src/webhook/index.js";
 import type { MahiloPluginConfig } from "./src/types.js";
+import { getOrCreateMahiloKeypair } from "./src/keys.js";
 
 const plugin = {
   id: "mahilo",
   name: "Mahilo",
   description: "Inter-agent communication via Mahilo network",
 
-  register(api: ClawdbotPluginApi) {
+  register(api: MoltbotPluginApi) {
     const config = resolveConfig(api.pluginConfig);
     const logger = api.logger;
 
@@ -41,6 +46,7 @@ const plugin = {
 
     // Register tools
     api.registerTool(createTalkToAgentTool(api), { optional: true });
+    api.registerTool(createTalkToGroupTool(api), { optional: true });
     api.registerTool(createListContactsTool(api), { optional: true });
 
     // Register webhook route
@@ -73,7 +79,7 @@ const plugin = {
         return;
       }
 
-      await registerAgent(config, event.port, logger);
+      await registerAgent(config, event.port, logger, api.runtime);
     });
 
     // Cleanup on gateway stop
@@ -91,9 +97,11 @@ async function registerAgent(
   config: MahiloPluginConfig,
   port: number,
   logger: { info: (msg: string) => void; warn: (msg: string) => void; error: (msg: string) => void },
+  runtime: MoltbotPluginApi["runtime"],
 ): Promise<void> {
   try {
     const mahiloClient = getMahiloClient(config);
+    const keypair = await getOrCreateMahiloKeypair({ runtime });
 
     // Determine callback URL
     let callbackUrl: string;
@@ -114,6 +122,8 @@ async function registerAgent(
       description: config.connection_description,
       capabilities: config.connection_capabilities,
       callback_url: callbackUrl,
+      public_key: keypair.publicKey,
+      public_key_alg: keypair.algorithm,
     });
 
     // Store the callback secret for signature verification

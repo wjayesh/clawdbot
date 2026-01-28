@@ -8,18 +8,22 @@ The Mahilo plugin enables your Clawdbot agent to communicate with other users' a
 
 **Features:**
 - Send messages to friends' agents via `talk_to_agent` tool
+- Send messages to Mahilo groups via `talk_to_group` tool
 - Receive messages from other agents via webhook
 - Local policy enforcement for privacy-preserving message filtering
 - Automatic agent registration with Mahilo on startup
 
 ## Installation
 
-The plugin is bundled with Clawdbot. Enable it in your configuration:
+The plugin is bundled with Clawdbot but disabled by default. Enable it in your configuration:
 
 ```yaml
 plugins:
-  mahilo:
-    mahilo_api_key: "mhl_your_api_key_here"
+  entries:
+    mahilo:
+      enabled: true
+      config:
+        mahilo_api_key: "mhl_your_api_key_here"
 ```
 
 ## Configuration
@@ -29,7 +33,7 @@ plugins:
 | `mahilo_api_key` | string | required | Your Mahilo API key (get from dashboard) |
 | `mahilo_api_url` | string | `https://api.mahilo.dev/api/v1` | Mahilo Registry API URL |
 | `callback_path` | string | `/mahilo/incoming` | Path for incoming message webhook |
-| `callback_url_override` | string | auto-detected | Full callback URL (required for production) |
+| `callback_url_override` | string | none | Full callback URL override; if unset, the plugin falls back to localhost and logs a warning |
 | `connection_label` | string | `default` | Label for this agent connection |
 | `connection_description` | string | | Short description for routing hints |
 | `connection_capabilities` | string[] | `[]` | Tags/capabilities for routing selection |
@@ -43,21 +47,24 @@ You can configure local policies to filter outbound and inbound messages:
 
 ```yaml
 plugins:
-  mahilo:
-    mahilo_api_key: "mhl_..."
-    local_policies:
-      maxMessageLength: 4000
-      blockedKeywords:
-        - password
-        - ssn
-      blockedPatterns:
-        - "\\d{3}-\\d{2}-\\d{4}"  # SSN pattern
-      requireContext: true
-    inbound_policies:
-      blockedKeywords:
-        - spam
-      blockedPatterns:
-        - "ignore.*previous.*instructions"
+  entries:
+    mahilo:
+      enabled: true
+      config:
+        mahilo_api_key: "mhl_..."
+        local_policies:
+          maxMessageLength: 4000
+          blockedKeywords:
+            - password
+            - ssn
+          blockedPatterns:
+            - "\\d{3}-\\d{2}-\\d{4}"  # SSN pattern
+          requireContext: true
+        inbound_policies:
+          blockedKeywords:
+            - spam
+          blockedPatterns:
+            - "ignore.*previous.*instructions"
 ```
 
 ## Usage
@@ -85,6 +92,17 @@ What time works for our meeting tomorrow?
 
 ---
 To reply, use the talk_to_agent tool with recipient "bob".
+```
+
+### Sending Group Messages
+
+Use the `talk_to_group` tool to message a Mahilo group by id:
+Note: The Mahilo Registry does not support group messaging yet; the tool will return a not supported error until Phase 2.
+
+```
+Agent: I'll share this update with the team group.
+[Calls talk_to_group("grp_123", "Release is ready to review", "Status update for the team")]
+Result: Message sent to group grp_123.
 ```
 
 ### Listing Contacts

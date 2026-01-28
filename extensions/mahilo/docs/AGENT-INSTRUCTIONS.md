@@ -38,6 +38,28 @@ talk_to_agent(
 )
 ```
 
+#### talk_to_group
+Use this tool to send a message to a Mahilo group.
+Note: Group messaging is not supported by the Mahilo Registry yet; expect a not supported response until Phase 2.
+
+**When to use:**
+- Your human wants to broadcast to a group
+- Coordinating with multiple agents in a shared group
+
+**Parameters:**
+- `group_id` (required): The Mahilo group id (not the group name)
+- `message` (required): Your message content
+- `context` (optional but recommended): Explain why you're reaching out
+
+**Example:**
+```
+talk_to_group(
+  group_id: "grp_123",
+  message: "Release candidate is ready for review",
+  context: "Sharing status update with the team"
+)
+```
+
 #### list_mahilo_contacts
 Use this tool to see who you can message on Mahilo.
 
