@@ -2,7 +2,7 @@
  * Mahilo Plugin Configuration
  */
 
-import type { EncryptionConfig, MahiloPluginConfig } from "./types.js";
+import type { EncryptionConfig, LlmPolicyConfig, MahiloPluginConfig } from "./types.js";
 
 export const DEFAULT_CONFIG: Required<
   Pick<MahiloPluginConfig, "mahilo_api_url" | "callback_path" | "connection_label" | "auto_register" | "inbound_session_key">
@@ -19,9 +19,18 @@ export const DEFAULT_ENCRYPTION_CONFIG: Required<EncryptionConfig> = {
   allow_plaintext_fallback: true,
 };
 
+export const DEFAULT_LLM_POLICY_CONFIG: Required<LlmPolicyConfig> = {
+  enabled: false,
+  provider: "",
+  model: "",
+  timeout_ms: 15_000,
+  cache_ttl_ms: 5 * 60 * 1000, // 5 minutes
+};
+
 export function resolveConfig(pluginConfig: Record<string, unknown> | undefined): MahiloPluginConfig {
   const cfg = (pluginConfig ?? {}) as MahiloPluginConfig;
   const encryptionCfg = cfg.encryption ?? {};
+  const llmPolicyCfg = cfg.llm_policies ?? {};
   return {
     mahilo_api_key: cfg.mahilo_api_key,
     mahilo_api_url: cfg.mahilo_api_url ?? DEFAULT_CONFIG.mahilo_api_url,
@@ -39,6 +48,13 @@ export function resolveConfig(pluginConfig: Record<string, unknown> | undefined)
       mode: encryptionCfg.mode ?? DEFAULT_ENCRYPTION_CONFIG.mode,
       allow_plaintext_fallback:
         encryptionCfg.allow_plaintext_fallback ?? DEFAULT_ENCRYPTION_CONFIG.allow_plaintext_fallback,
+    },
+    llm_policies: {
+      enabled: llmPolicyCfg.enabled ?? DEFAULT_LLM_POLICY_CONFIG.enabled,
+      provider: llmPolicyCfg.provider ?? DEFAULT_LLM_POLICY_CONFIG.provider,
+      model: llmPolicyCfg.model ?? DEFAULT_LLM_POLICY_CONFIG.model,
+      timeout_ms: llmPolicyCfg.timeout_ms ?? DEFAULT_LLM_POLICY_CONFIG.timeout_ms,
+      cache_ttl_ms: llmPolicyCfg.cache_ttl_ms ?? DEFAULT_LLM_POLICY_CONFIG.cache_ttl_ms,
     },
   };
 }

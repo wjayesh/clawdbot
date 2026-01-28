@@ -802,7 +802,7 @@
 
 #### 13.1 Fetch LLM Policies from Registry
 - **ID**: `PLG-067`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P0
 - **Notes**:
   - Registry already supports LLM policies: `POST /api/v1/policies` with `policy_type: "llm"`
@@ -810,13 +810,13 @@
   - Cache policies with TTL (e.g., 5 minutes)
   - Fetch applicable policies for sender/recipient/group
 - **Acceptance Criteria**:
-  - [ ] Client method to fetch LLM policies
-  - [ ] Caching with configurable TTL
-  - [ ] Handle registry unavailable gracefully
+  - [x] Client method to fetch LLM policies
+  - [x] Caching with configurable TTL
+  - [x] Handle registry unavailable gracefully
 
 #### 13.2 LLM Policy Evaluation Engine
 - **ID**: `PLG-068`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P0
 - **Notes**:
   - Evaluate message against LLM policy prompt
@@ -825,10 +825,10 @@
   - Evaluate both outbound and inbound messages
   - Return clear allow/block decision with optional reason
 - **Acceptance Criteria**:
-  - [ ] LLM evaluator implemented
-  - [ ] Configurable model selection
-  - [ ] Works for outbound and inbound messages
-  - [ ] Handles LLM errors gracefully (fail-open or fail-closed configurable)
+  - [x] LLM evaluator implemented
+  - [x] Configurable model selection
+  - [x] Works for outbound and inbound messages
+  - [x] Handles LLM errors gracefully (fail-open or fail-closed configurable)
 
 #### 13.3 LLM Policy Integration with Message Flow
 - **ID**: `PLG-069`
@@ -1072,14 +1072,13 @@
 
 | Priority | Total | Pending | Blocked | In Progress | Done |
 |----------|-------|---------|---------|-------------|------|
-| P0       | 8     | 2       | 5       | 0           | 1    |
+| P0       | 8     | 0       | 5       | 0           | 3    |
 | P1       | 16    | 11      | 0       | 0           | 5    |
 | P2       | 8     | 7       | 0       | 0           | 1    |
-| **Total**| 32    | 20      | 5       | 0           | 7    |
+| **Total**| 32    | 18      | 5       | 0           | 9    |
 
 **High Priority (P0 Pending)**:
-- PLG-067: Fetch LLM Policies from Registry
-- PLG-068: LLM Policy Evaluation Engine
+- All P0 tasks complete (except blocked encryption tasks)
 
 **Pending (registry already supports these)**:
 - PLG-046-051: Group Messaging (registry has groups)

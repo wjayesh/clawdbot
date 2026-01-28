@@ -8,7 +8,7 @@ Last Updated: 2026-01-28
 ## Current Status
 
 **Phase 1**: 38/38 tasks complete (100%) ✅
-**Phase 2**: 7/32 tasks complete (22%) - 20 pending, 5 blocked on registry encryption spec
+**Phase 2**: 9/32 tasks complete (28%) - 18 pending, 5 blocked on registry encryption spec
 
 ## What Works Today
 
@@ -42,14 +42,13 @@ The full message exchange loop is complete:
 
 | Priority | Total | Done | Pending | Blocked |
 |----------|-------|------|---------|---------|
-| P0       | 8     | 1    | 2       | 5       |
+| P0       | 8     | 3    | 0       | 5       |
 | P1       | 16    | 5    | 11      | 0       |
 | P2       | 8     | 1    | 7       | 0       |
-| **Total**| 32    | 7    | 20      | 5       |
+| **Total**| 32    | 9    | 18      | 5       |
 
 **High Priority Pending (P0)**:
-- PLG-067: Fetch LLM Policies from Registry
-- PLG-068: LLM Policy Evaluation Engine
+- All P0 tasks complete (except blocked encryption tasks)
 
 **Pending (registry already supports these)**:
 - LLM policies (PLG-067-070) - registry stores, plugin evaluates locally
@@ -178,9 +177,10 @@ extensions/mahilo/
 │   │   └── trigger-agent.ts     # Agent run triggering
 │   └── policy/
 │       ├── index.ts
-│       └── local-filter.ts      # Local policy enforcement
+│       ├── local-filter.ts      # Local policy enforcement
+│       └── llm-evaluator.ts     # LLM-based policy evaluation
 └── tests/
-    ├── client.test.ts           # API client tests (28 tests)
+    ├── client.test.ts           # API client tests (45 tests)
     ├── signature.test.ts        # Signature verification (12 tests)
     ├── policy.test.ts           # Policy filter tests (20 tests)
     ├── dedup.test.ts            # Deduplication tests (7 tests)
@@ -189,10 +189,11 @@ extensions/mahilo/
     ├── trigger-agent.test.ts    # Agent triggering tests (13 tests)
     ├── state.test.ts            # State persistence tests (9 tests)
     ├── callback-url.test.ts     # Callback URL tests (17 tests)
-    └── config.test.ts           # Config validation tests (17 tests)
+    ├── config.test.ts           # Config validation tests (17 tests)
+    └── llm-evaluator.test.ts    # LLM policy evaluator tests (21 tests)
 ```
 
-**Total: 188 tests passing**
+**Total: 226 tests passing**
 
 ---
 
@@ -262,13 +263,29 @@ extensions/mahilo/
 - Created tests for state, callback-url, and config
 - All 188 tests pass
 
+### Session 10 (2026-01-28)
+- Implemented PLG-067: Fetch LLM Policies from Registry
+  - Added LLM policy types (LlmPolicy, LlmPolicyScope, LlmPolicyDirection)
+  - Added `getLlmPolicies()` client method with caching (5-min TTL)
+  - Added `getApplicablePolicies()` for filtering by direction/target
+  - Added 17 tests for policy fetching and caching
+- Implemented PLG-068: LLM Policy Evaluation Engine
+  - Created `llm-evaluator.ts` with policy evaluation logic
+  - Uses embedded runner for LLM calls (keeps message content private)
+  - Supports fail-open/fail-closed behavior per policy
+  - Created `evaluatePolicy()` and `evaluatePolicies()` functions
+  - Added `createLlmPolicyEvaluator()` factory for reusable evaluators
+  - Added 21 tests for evaluation logic
+- Updated config types with `llm_policies` settings (enabled, provider, model, timeout)
+- All 226 mahilo tests pass
+
 ---
 
 ## Next Steps (Priority Order)
 
-1. **LLM Policy Enforcement** (PLG-067, PLG-068) - P0
-   - Fetch LLM policies from registry
-   - Implement semantic filtering for outbound/inbound messages
+1. **LLM Policy Integration** (PLG-069, PLG-070) - P1
+   - ✅ PLG-067, PLG-068 done - policies can be fetched and evaluated
+   - Next: Integrate into talk_to_agent/talk_to_group tools and webhook handler
 
 2. **Group Messaging** (PLG-046-051) - P1
    - Registry already supports groups - just wire up the plugin client

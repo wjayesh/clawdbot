@@ -34,6 +34,22 @@ export interface EncryptionConfig {
   allow_plaintext_fallback?: boolean;
 }
 
+/**
+ * Configuration for LLM-based policy evaluation.
+ */
+export interface LlmPolicyConfig {
+  /** Enable LLM policy evaluation. Default: false */
+  enabled?: boolean;
+  /** Provider to use for LLM evaluation (e.g., "anthropic", "openai"). If not set, uses default. */
+  provider?: string;
+  /** Model to use for evaluation (e.g., "claude-3-5-haiku-20241022"). If not set, uses cheapest/fastest. */
+  model?: string;
+  /** Timeout for each policy evaluation in milliseconds. Default: 15000 */
+  timeout_ms?: number;
+  /** Policy cache TTL in milliseconds. Default: 300000 (5 minutes) */
+  cache_ttl_ms?: number;
+}
+
 export interface MahiloPluginConfig {
   mahilo_api_key?: string;
   mahilo_api_url?: string;
@@ -51,6 +67,8 @@ export interface MahiloPluginConfig {
   inbound_agent_id?: string;
   /** Encryption settings for Mahilo messages. */
   encryption?: EncryptionConfig;
+  /** LLM-based policy evaluation settings. */
+  llm_policies?: LlmPolicyConfig;
 }
 
 // =============================================================================
@@ -170,4 +188,75 @@ export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 export interface PolicyResult {
   allowed: boolean;
   reason?: string;
+}
+
+// =============================================================================
+// LLM Policy Types (fetched from registry)
+// =============================================================================
+
+/**
+ * LLM policy scope determines when the policy applies:
+ * - global: applies to all messages for this user
+ * - user: applies to messages to/from specific user
+ * - group: applies to messages in specific group
+ */
+export type LlmPolicyScope = "global" | "user" | "group";
+
+/**
+ * LLM policy direction:
+ * - outbound: applies to messages being sent
+ * - inbound: applies to messages being received
+ * - both: applies to both directions
+ */
+export type LlmPolicyDirection = "outbound" | "inbound" | "both";
+
+/**
+ * LLM policy as stored in the registry.
+ */
+export interface LlmPolicy {
+  /** Unique policy ID */
+  id: string;
+  /** Human-readable name */
+  name: string;
+  /** The LLM prompt that evaluates the message. Should return allow/block decision. */
+  policy_content: string;
+  /** Scope of the policy */
+  scope: LlmPolicyScope;
+  /** Direction the policy applies to */
+  direction: LlmPolicyDirection;
+  /** Priority (higher = evaluated first, can short-circuit) */
+  priority: number;
+  /** For user-scoped policies, the target username */
+  target_user?: string;
+  /** For group-scoped policies, the target group ID */
+  target_group?: string;
+  /** Whether the policy is enabled */
+  enabled: boolean;
+  /** Fail behavior: "open" allows on LLM error, "closed" blocks on error */
+  fail_behavior?: "open" | "closed";
+  /** Created timestamp */
+  created_at: string;
+  /** Updated timestamp */
+  updated_at: string;
+}
+
+/**
+ * Response from GET /api/v1/policies
+ */
+export interface GetPoliciesResponse {
+  policies: LlmPolicy[];
+}
+
+/**
+ * LLM policy evaluation result.
+ */
+export interface LlmPolicyEvaluationResult {
+  /** Whether the message is allowed */
+  allowed: boolean;
+  /** Reason for blocking (if not allowed) */
+  reason?: string;
+  /** The policy that blocked the message (if any) */
+  blocking_policy_id?: string;
+  /** The policy name (if blocked) */
+  blocking_policy_name?: string;
 }
