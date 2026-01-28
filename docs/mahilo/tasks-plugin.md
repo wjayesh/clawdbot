@@ -1131,7 +1131,7 @@ Phase 2:
 - PLG-057 to PLG-059: Trusted routing - **PENDING** (registry already does routing by default!)
 - PLG-060 to PLG-062: Agent runner - **DONE** (uses callGateway)
 - PLG-065 to PLG-066: Secret rotation - **PENDING** (registry supports `rotate_secret: true`!)
-- PLG-067 to PLG-070: LLM policies - **PENDING** (registry has LLM policy storage, plugin needs evaluation)
+- PLG-067 to PLG-070: LLM policies - **DONE** (fetch, evaluate, integrate into tools/webhook)
 
 ---
 
