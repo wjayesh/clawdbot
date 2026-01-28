@@ -370,14 +370,15 @@
 - **Status**: `done`
 - **Priority**: P0
 - **Notes**:
-  - Phase 1: Logs messages for processing (agent runner is not public in plugin SDK yet)
-  - Do not import internal cron modules from external plugins
+  - Uses `callGateway({ method: "agent", ... })` to trigger actual agent runs
   - Set deliver: false (don't auto-send to channels)
   - Pass metadata (mahilo_message_id, etc.)
-  - Non-blocking (use setImmediate/nextTick)
+  - Non-blocking (uses setImmediate after webhook response)
+  - Supports configurable inbound_session_key and inbound_agent_id
 - **Acceptance Criteria**:
-  - [ ] Logs formatted message and metadata
-  - [ ] Doesn't block webhook
+  - [x] Triggers actual agent run via callGateway
+  - [x] Doesn't block webhook
+  - [x] Agent processes and can respond via talk_to_agent
 
 #### 6.3 Handle Agent Run Errors
 - **ID**: `PLG-022`
@@ -988,10 +989,10 @@
 
 | Priority | Total | Pending | Blocked | In Progress | Done |
 |----------|-------|---------|---------|-------------|------|
-| P0       | 6     | 0       | 6       | 0           | 0    |
-| P1       | 14    | 0       | 11      | 0           | 3    |
+| P0       | 6     | 0       | 5       | 0           | 1    |
+| P1       | 14    | 0       | 9       | 0           | 5    |
 | P2       | 8     | 0       | 8       | 0           | 0    |
-| **Total**| 28    | 0       | 25      | 0           | 3    |
+| **Total**| 28    | 0       | 22      | 0           | 6    |
 
 ---
 
@@ -1033,7 +1034,7 @@ Phase 2:
 - PLG-046 to PLG-051 depend on registry group endpoints + group message payloads
 - PLG-052 to PLG-056 depend on registry policy endpoints
 - PLG-057 to PLG-059 depend on trusted routing support in the registry
-- PLG-060 to PLG-062 depend on a plugin SDK agent runner API
+- PLG-060 to PLG-062: DONE - uses callGateway({ method: "agent" }) instead of SDK API
 - PLG-065 to PLG-066 depend on callback secret rotation support (or a re-register fallback)
 
 ---
@@ -1045,7 +1046,7 @@ Phase 2:
 1. **Plugin SDK**: Use existing plugin infrastructure for registration
 2. **Route Registration**: Use `api.registerHttpRoute` and Node req/res handling
 3. **Tool Registration**: Follow existing tool patterns (TypeBox + `execute(_id, params)`)
-4. **Agent Triggering**: No public SDK API yet; Phase 1 logs only
+4. **Agent Triggering**: Uses `callGateway({ method: "agent", ... })` to trigger actual agent runs
 5. **Config System**: Use Clawdbot's config loading
 
 ### Files to Reference
