@@ -68,7 +68,11 @@ plugins:
 
 ### Policy Configuration
 
-You can configure local policies to filter outbound and inbound messages:
+You can configure local policies to filter outbound and inbound messages. The plugin supports three policy sources:
+
+- **local**: Use only local policies from your config file
+- **registry**: Use only policies configured in the Mahilo Registry dashboard
+- **merged** (default): Merge local and registry policies (local takes precedence)
 
 ```yaml
 plugins:
@@ -77,6 +81,7 @@ plugins:
       enabled: true
       config:
         mahilo_api_key: "mhl_..."
+        policy_source: merged  # local, registry, or merged (default)
         local_policies:
           maxMessageLength: 4000
           blockedKeywords:
@@ -91,6 +96,28 @@ plugins:
           blockedPatterns:
             - "ignore.*previous.*instructions"
 ```
+
+#### Policy Merge Rules
+
+When using `policy_source: merged`:
+
+- **maxMessageLength**: Takes the smaller (stricter) value
+- **minMessageLength**: Takes the larger (stricter) value
+- **blockedKeywords**: Combined from all sources (case-insensitive deduplication)
+- **blockedPatterns**: Combined from all sources (exact deduplication)
+- **requireContext**: True if any policy requires it
+
+Local policies are processed first, so they take precedence for numeric limits.
+
+#### Registry Policies
+
+You can also configure policies in the Mahilo Registry dashboard. These policies can be:
+
+- **Global**: Apply to all messages
+- **User-scoped**: Apply to messages to/from specific users
+- **Group-scoped**: Apply to messages in specific groups
+
+Registry policies are fetched and cached with a 5-minute TTL. If the registry is unavailable, the plugin falls back to cached policies or continues with local policies only.
 
 ## Usage
 

@@ -1002,3 +1002,273 @@ describe("MahiloClient - LLM Policies", () => {
     });
   });
 });
+
+// =============================================================================
+// getHeuristicPolicies Tests
+// =============================================================================
+
+describe("MahiloClient - Heuristic Policies", () => {
+  let client: MahiloClient;
+  const apiKey = "test-api-key";
+  const baseUrl = "https://api.mahilo.dev/api/v1";
+
+  beforeEach(() => {
+    client = new MahiloClient({ apiKey, baseUrl, policyCacheTtl: 1000 });
+    mockFetch.mockReset();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const sampleHeuristicPolicies = [
+    {
+      id: "hpol_1",
+      name: "Max length global",
+      rules: {
+        maxMessageLength: 4000,
+        blockedKeywords: ["password", "secret"],
+      },
+      scope: "global",
+      direction: "both",
+      priority: 100,
+      enabled: true,
+      created_at: "2025-01-01T00:00:00Z",
+      updated_at: "2025-01-01T00:00:00Z",
+    },
+    {
+      id: "hpol_2",
+      name: "Strict for Bob",
+      rules: {
+        maxMessageLength: 1000,
+        blockedPatterns: ["\\d{3}-\\d{2}-\\d{4}"],
+      },
+      scope: "user",
+      direction: "outbound",
+      priority: 50,
+      target_user: "bob",
+      enabled: true,
+      created_at: "2025-01-01T00:00:00Z",
+      updated_at: "2025-01-01T00:00:00Z",
+    },
+    {
+      id: "hpol_3",
+      name: "Disabled policy",
+      rules: { blockedKeywords: ["spam"] },
+      scope: "global",
+      direction: "both",
+      priority: 200,
+      enabled: false,
+      created_at: "2025-01-01T00:00:00Z",
+      updated_at: "2025-01-01T00:00:00Z",
+    },
+  ];
+
+  describe("getHeuristicPolicies", () => {
+    it("should fetch heuristic policies from registry", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ policies: sampleHeuristicPolicies }),
+      });
+
+      const result = await client.getHeuristicPolicies();
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${baseUrl}/policies?policy_type=heuristic`,
+        expect.anything(),
+      );
+      // Should only return enabled policies
+      expect(result).toHaveLength(2);
+      expect(result.every((p) => p.enabled)).toBe(true);
+    });
+
+    it("should filter out disabled policies", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ policies: sampleHeuristicPolicies }),
+      });
+
+      const result = await client.getHeuristicPolicies();
+
+      expect(result.find((p) => p.id === "hpol_3")).toBeUndefined();
+    });
+
+    it("should sort policies by priority (descending)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ policies: sampleHeuristicPolicies }),
+      });
+
+      const result = await client.getHeuristicPolicies();
+
+      // hpol_1 has priority 100, hpol_2 has priority 50
+      expect(result[0].id).toBe("hpol_1");
+      expect(result[1].id).toBe("hpol_2");
+    });
+
+    it("should cache heuristic policies", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ policies: sampleHeuristicPolicies }),
+      });
+
+      await client.getHeuristicPolicies();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      await client.getHeuristicPolicies();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("should refresh cache after TTL expires", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ policies: sampleHeuristicPolicies }),
+      });
+
+      await client.getHeuristicPolicies();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
+      await client.getHeuristicPolicies();
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("should force refresh when requested", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ policies: sampleHeuristicPolicies }),
+      });
+
+      await client.getHeuristicPolicies();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      await client.getHeuristicPolicies({ forceRefresh: true });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("should use stale cache on registry error", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ policies: sampleHeuristicPolicies }),
+      });
+      await client.getHeuristicPolicies();
+
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
+      mockFetch.mockRejectedValueOnce(new Error("Network error"));
+      const result = await client.getHeuristicPolicies();
+
+      expect(result).toHaveLength(2);
+    });
+
+    it("should throw on registry error without cache", async () => {
+      mockFetch.mockRejectedValueOnce(new Error("Network error"));
+
+      await expect(client.getHeuristicPolicies()).rejects.toThrow();
+    });
+
+    it("should handle empty policies array", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ policies: [] }),
+      });
+
+      const result = await client.getHeuristicPolicies();
+      expect(result).toEqual([]);
+    });
+
+    it("should clear heuristic cache separately", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ policies: sampleHeuristicPolicies }),
+      });
+
+      await client.getHeuristicPolicies();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      client.clearHeuristicPolicyCache();
+
+      await client.getHeuristicPolicies();
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("getApplicableHeuristicPolicies", () => {
+    beforeEach(() => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ policies: sampleHeuristicPolicies }),
+      });
+    });
+
+    it("should return global policies for any context", async () => {
+      const result = await client.getApplicableHeuristicPolicies({
+        direction: "outbound",
+      });
+
+      expect(result.some((p) => p.id === "hpol_1")).toBe(true);
+      expect(result.some((p) => p.id === "hpol_2")).toBe(false);
+    });
+
+    it("should include user-scoped policies when target matches", async () => {
+      const result = await client.getApplicableHeuristicPolicies({
+        direction: "outbound",
+        targetUser: "bob",
+      });
+
+      expect(result.some((p) => p.id === "hpol_1")).toBe(true);
+      expect(result.some((p) => p.id === "hpol_2")).toBe(true);
+    });
+
+    it("should filter by direction", async () => {
+      const result = await client.getApplicableHeuristicPolicies({
+        direction: "inbound",
+        targetUser: "bob",
+      });
+
+      expect(result.some((p) => p.id === "hpol_1")).toBe(true);
+      expect(result.some((p) => p.id === "hpol_2")).toBe(false);
+    });
+
+    it("should return policies in priority order", async () => {
+      const result = await client.getApplicableHeuristicPolicies({
+        direction: "outbound",
+        targetUser: "bob",
+      });
+
+      const hpol1Index = result.findIndex((p) => p.id === "hpol_1");
+      const hpol2Index = result.findIndex((p) => p.id === "hpol_2");
+      expect(hpol1Index).toBeLessThan(hpol2Index);
+    });
+
+    it("should handle group-scoped policies", async () => {
+      const groupPolicy = {
+        id: "hpol_group",
+        name: "Group policy",
+        rules: { maxMessageLength: 500 },
+        scope: "group",
+        direction: "both",
+        priority: 75,
+        target_group: "group_123",
+        enabled: true,
+        created_at: "2025-01-01T00:00:00Z",
+        updated_at: "2025-01-01T00:00:00Z",
+      };
+
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ policies: [...sampleHeuristicPolicies, groupPolicy] }),
+      });
+      client.clearPolicyCache();
+
+      const result = await client.getApplicableHeuristicPolicies({
+        direction: "inbound",
+        targetGroup: "group_123",
+      });
+
+      expect(result.some((p) => p.id === "hpol_group")).toBe(true);
+    });
+  });
+});

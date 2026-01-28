@@ -8,7 +8,7 @@ Last Updated: 2026-01-28
 ## Current Status
 
 **Phase 1**: 38/38 tasks complete (100%) ✅
-**Phase 2**: 17/32 tasks complete (53%) - 10 pending, 5 blocked on registry encryption spec
+**Phase 2**: 22/32 tasks complete (69%) - 5 pending, 5 blocked on registry encryption spec
 
 ## What Works Today
 
@@ -43,15 +43,14 @@ The full message exchange loop is complete:
 | Priority | Total | Done | Pending | Blocked |
 |----------|-------|------|---------|---------|
 | P0       | 8     | 3    | 0       | 5       |
-| P1       | 16    | 11   | 5       | 0       |
+| P1       | 16    | 16   | 0       | 0       |
 | P2       | 8     | 3    | 5       | 0       |
-| **Total**| 32    | 17   | 10      | 5       |
+| **Total**| 32    | 22   | 5       | 5       |
 
 **Completed (this session)**:
-- Group messaging (PLG-046-051) - all 6 tasks complete
+- Policy sync (PLG-052-056) - all 5 tasks complete
 
 **Pending (registry already supports these)**:
-- Policy sync (PLG-052-056) - registry has policy CRUD
 - Trusted routing (PLG-057-059) - registry does routing by default
 - Secret rotation (PLG-065-066) - registry has `rotate_secret: true`
 
@@ -122,7 +121,7 @@ The full message exchange loop is complete:
 - ✅ PLG-036: Tool documentation
 - ✅ PLG-037: Agent instructions template
 
-### Phase 2 (17 Complete, 10 Pending, 5 Blocked)
+### Phase 2 (22 Complete, 5 Pending, 5 Blocked)
 
 #### Completed
 - ✅ PLG-060: Agent runner integration (callGateway)
@@ -141,9 +140,13 @@ The full message exchange loop is complete:
 - ✅ PLG-049: list_mahilo_contacts: Include Groups
 - ✅ PLG-050: Group Messaging Tests
 - ✅ PLG-051: Group Messaging Docs
+- ✅ PLG-052: Mahilo Client: Heuristic Policies API
+- ✅ PLG-053: Policy Merge + Precedence
+- ✅ PLG-054: Policy Config Controls
+- ✅ PLG-055: Policy Sync Tests
+- ✅ PLG-056: Policy Sync Docs
 
 #### Pending (registry already supports these - just need plugin implementation)
-- PLG-052 to PLG-056: Registry policy sync (P1/P2)
 - PLG-057 to PLG-059: Trusted routing (P2)
 - PLG-065 to PLG-066: Callback secret rotation (P2)
 
@@ -184,22 +187,24 @@ extensions/mahilo/
 │   └── policy/
 │       ├── index.ts
 │       ├── local-filter.ts      # Local policy enforcement
-│       └── llm-evaluator.ts     # LLM-based policy evaluation
+│       ├── llm-evaluator.ts     # LLM-based policy evaluation
+│       └── merge.ts             # Policy merge + precedence logic
 └── tests/
-    ├── client.test.ts           # API client tests (45 tests)
+    ├── client.test.ts           # API client tests (67 tests)
     ├── signature.test.ts        # Signature verification (12 tests)
     ├── policy.test.ts           # Policy filter tests (20 tests)
     ├── dedup.test.ts            # Deduplication tests (7 tests)
-    ├── tools.test.ts            # Tool tests (47 tests)
-    ├── webhook.test.ts          # Webhook handler tests (18 tests)
-    ├── trigger-agent.test.ts    # Agent triggering tests (13 tests)
+    ├── tools.test.ts            # Tool tests (62 tests)
+    ├── webhook.test.ts          # Webhook handler tests (23 tests)
+    ├── trigger-agent.test.ts    # Agent triggering tests (19 tests)
     ├── state.test.ts            # State persistence tests (9 tests)
     ├── callback-url.test.ts     # Callback URL tests (17 tests)
     ├── config.test.ts           # Config validation tests (17 tests)
-    └── llm-evaluator.test.ts    # LLM policy evaluator tests (21 tests)
+    ├── llm-evaluator.test.ts    # LLM policy evaluator tests (21 tests)
+    └── merge.test.ts            # Policy merge tests (37 tests)
 ```
 
-**Total: 226 tests passing**
+**Total: 311 tests passing**
 
 ---
 
@@ -327,20 +332,41 @@ extensions/mahilo/
   - Added group troubleshooting entries
   - Updated list_mahilo_contacts documentation
 
+### Session 13 (2026-01-28)
+- Implemented PLG-052: Mahilo Client Heuristic Policies API
+  - Added HeuristicPolicy, HeuristicPolicyRules types
+  - Added getHeuristicPolicies() and getApplicableHeuristicPolicies() client methods
+  - Added caching with TTL and graceful fallback on registry errors
+  - Added 15 tests for heuristic policy fetching
+- Implemented PLG-053: Policy Merge + Precedence
+  - Created policy/merge.ts with merge logic
+  - mergeHeuristicRules() combines rules from multiple sources
+  - Local policies take precedence (stricter numeric limits)
+  - Combined blocked keywords/patterns with deduplication
+- Implemented PLG-054: Policy Config Controls
+  - Added policy_source config option: "local" | "registry" | "merged"
+  - Updated moltbot.plugin.json schema
+  - Default: "merged" for full functionality
+- Implemented PLG-055: Policy Sync Tests
+  - Created merge.test.ts with 37 tests
+  - Tests for merge rules, precedence, mode switching
+  - Tests for outbound/inbound policy application
+- Implemented PLG-056: Policy Sync Docs
+  - Updated README with policy source options
+  - Documented merge rules and registry policies
+  - Added example configurations
+- All 311 mahilo tests pass
+
 ---
 
 ## Next Steps (Priority Order)
 
-1. **Policy Sync** (PLG-052-056) - P1
-   - Registry already has policy CRUD - plugin needs to fetch and merge
-   - Merge local policies with registry policies
-
-2. **Trusted Routing** (PLG-057-059) - P2
+1. **Trusted Routing** (PLG-057-059) - P2
    - Registry does routing by default - add config controls
 
-3. **Callback Secret Rotation** (PLG-065-066) - P2
+2. **Callback Secret Rotation** (PLG-065-066) - P2
    - Registry supports `rotate_secret: true` - add CLI/config support
 
-4. **E2E Encryption** (PLG-039-045) - P0 but BLOCKED
+3. **E2E Encryption** (PLG-039-045) - P0 but BLOCKED
    - Registry stores encryption metadata but spec not finalized
    - Plugin can implement once spec is ready

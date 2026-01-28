@@ -69,6 +69,14 @@ export interface MahiloPluginConfig {
   encryption?: EncryptionConfig;
   /** LLM-based policy evaluation settings. */
   llm_policies?: LlmPolicyConfig;
+  /**
+   * Policy source mode for heuristic policies.
+   * - local: use only local policies from config
+   * - registry: use only registry policies
+   * - merged: merge local and registry policies (local takes precedence)
+   * Default: merged
+   */
+  policy_source?: PolicySourceMode;
 }
 
 // =============================================================================
@@ -280,3 +288,86 @@ export interface LlmPolicyEvaluationResult {
   /** The policy name (if blocked) */
   blocking_policy_name?: string;
 }
+
+// =============================================================================
+// Heuristic Policy Types (fetched from registry)
+// =============================================================================
+
+/**
+ * Heuristic policy scope (same as LLM policy scope):
+ * - global: applies to all messages for this user
+ * - user: applies to messages to/from specific user
+ * - group: applies to messages in specific group
+ */
+export type HeuristicPolicyScope = "global" | "user" | "group";
+
+/**
+ * Heuristic policy direction:
+ * - outbound: applies to messages being sent
+ * - inbound: applies to messages being received
+ * - both: applies to both directions
+ */
+export type HeuristicPolicyDirection = "outbound" | "inbound" | "both";
+
+/**
+ * Heuristic policy rules (static rule-based filtering).
+ */
+export interface HeuristicPolicyRules {
+  /** Maximum message length */
+  maxMessageLength?: number;
+  /** Minimum message length */
+  minMessageLength?: number;
+  /** Blocked keywords (case-insensitive) */
+  blockedKeywords?: string[];
+  /** Blocked patterns (regex) */
+  blockedPatterns?: string[];
+  /** Require context for outbound messages */
+  requireContext?: boolean;
+}
+
+/**
+ * Heuristic policy as stored in the registry.
+ */
+export interface HeuristicPolicy {
+  /** Unique policy ID */
+  id: string;
+  /** Human-readable name */
+  name: string;
+  /** The heuristic rules to apply */
+  rules: HeuristicPolicyRules;
+  /** Scope of the policy */
+  scope: HeuristicPolicyScope;
+  /** Direction the policy applies to */
+  direction: HeuristicPolicyDirection;
+  /** Priority (higher = evaluated first) */
+  priority: number;
+  /** For user-scoped policies, the target username */
+  target_user?: string;
+  /** For group-scoped policies, the target group ID */
+  target_group?: string;
+  /** Whether the policy is enabled */
+  enabled: boolean;
+  /** Created timestamp */
+  created_at: string;
+  /** Updated timestamp */
+  updated_at: string;
+}
+
+/**
+ * Response from GET /api/v1/policies?policy_type=heuristic
+ */
+export interface GetHeuristicPoliciesResponse {
+  policies: HeuristicPolicy[];
+}
+
+// =============================================================================
+// Policy Source Configuration
+// =============================================================================
+
+/**
+ * Policy source mode:
+ * - local: use only local policies from config
+ * - registry: use only registry policies
+ * - merged: merge local and registry policies (local takes precedence)
+ */
+export type PolicySourceMode = "local" | "registry" | "merged";

@@ -5,9 +5,11 @@
 import type {
   AgentConnection,
   Friend,
+  GetHeuristicPoliciesResponse,
   GetPoliciesResponse,
   Group,
   GroupMember,
+  HeuristicPolicy,
   LlmPolicy,
   MahiloPluginConfig,
   RegisterAgentRequest,
@@ -33,12 +35,18 @@ interface PolicyCache {
   fetchedAt: number;
 }
 
+interface HeuristicPolicyCache {
+  policies: HeuristicPolicy[];
+  fetchedAt: number;
+}
+
 export class MahiloClient {
   private apiKey: string;
   private baseUrl: string;
   private timeout: number;
   private policyCacheTtl: number;
   private policyCache: PolicyCache | null = null;
+  private heuristicPolicyCache: HeuristicPolicyCache | null = null;
 
   constructor(options: MahiloClientOptions) {
     this.apiKey = options.apiKey;
@@ -52,6 +60,21 @@ export class MahiloClient {
    */
   clearPolicyCache(): void {
     this.policyCache = null;
+    this.heuristicPolicyCache = null;
+  }
+
+  /**
+   * Clear only the LLM policy cache.
+   */
+  clearLlmPolicyCache(): void {
+    this.policyCache = null;
+  }
+
+  /**
+   * Clear only the heuristic policy cache.
+   */
+  clearHeuristicPolicyCache(): void {
+    this.heuristicPolicyCache = null;
   }
 
   private async request<T>(
@@ -273,6 +296,91 @@ export class MahiloClient {
     targetGroup?: string;
   }): Promise<LlmPolicy[]> {
     const allPolicies = await this.getLlmPolicies();
+
+    return allPolicies.filter((policy) => {
+      // Check direction
+      if (policy.direction !== "both" && policy.direction !== context.direction) {
+        return false;
+      }
+
+      // Check scope
+      switch (policy.scope) {
+        case "global":
+          return true;
+
+        case "user":
+          // User-scoped policies need a target user match
+          return context.targetUser && policy.target_user === context.targetUser;
+
+        case "group":
+          // Group-scoped policies need a target group match
+          return context.targetGroup && policy.target_group === context.targetGroup;
+
+        default:
+          return false;
+      }
+    });
+  }
+
+  // =========================================================================
+  // Heuristic Policy Methods
+  // =========================================================================
+
+  /**
+   * Fetch heuristic policies from the registry with caching.
+   * Filters to only heuristic-type policies that are enabled.
+   */
+  async getHeuristicPolicies(options?: { forceRefresh?: boolean }): Promise<HeuristicPolicy[]> {
+    const now = Date.now();
+
+    // Return cached policies if valid and not forcing refresh
+    if (
+      !options?.forceRefresh &&
+      this.heuristicPolicyCache &&
+      now - this.heuristicPolicyCache.fetchedAt < this.policyCacheTtl
+    ) {
+      return this.heuristicPolicyCache.policies;
+    }
+
+    try {
+      // Fetch policies from registry, filtered by policy_type=heuristic
+      const response = await this.request<GetHeuristicPoliciesResponse>(
+        "GET",
+        "/policies?policy_type=heuristic",
+      );
+
+      // Filter to enabled policies only and sort by priority (descending)
+      const enabledPolicies = (response.policies ?? [])
+        .filter((p) => p.enabled)
+        .sort((a, b) => b.priority - a.priority);
+
+      // Update cache
+      this.heuristicPolicyCache = {
+        policies: enabledPolicies,
+        fetchedAt: now,
+      };
+
+      return enabledPolicies;
+    } catch (err) {
+      // If registry is unavailable and we have stale cache, use it
+      if (this.heuristicPolicyCache) {
+        return this.heuristicPolicyCache.policies;
+      }
+      // Otherwise, throw the error (caller can handle gracefully)
+      throw err;
+    }
+  }
+
+  /**
+   * Get heuristic policies applicable to a specific context.
+   * Returns policies in priority order (highest first).
+   */
+  async getApplicableHeuristicPolicies(context: {
+    direction: "outbound" | "inbound";
+    targetUser?: string;
+    targetGroup?: string;
+  }): Promise<HeuristicPolicy[]> {
+    const allPolicies = await this.getHeuristicPolicies();
 
     return allPolicies.filter((policy) => {
       // Check direction

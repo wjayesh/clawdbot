@@ -869,19 +869,19 @@
 
 #### 14.1 Mahilo Client: Policies API
 - **ID**: `PLG-052`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
   - Registry already supports: `GET /api/v1/policies?scope=global|user|group`
   - Add client methods to fetch heuristic + LLM policies
   - Add caching with TTL (5 min) and safe fallback
 - **Acceptance Criteria**:
-  - [ ] Policies fetched + cached
-  - [ ] Client errors handled gracefully
+  - [x] Policies fetched + cached
+  - [x] Client errors handled gracefully
 
 #### 14.2 Policy Merge + Precedence
 - **ID**: `PLG-053`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
   - Merge local policies with registry policies
@@ -889,41 +889,41 @@
   - For heuristic: merge rules (e.g., take stricter maxLength)
   - For LLM: evaluate all in priority order
 - **Acceptance Criteria**:
-  - [ ] Merge rules defined and documented
-  - [ ] Inbound/outbound enforcement uses merged policies
+  - [x] Merge rules defined and documented
+  - [x] Inbound/outbound enforcement uses merged policies
 
 #### 14.3 Policy Config Controls
 - **ID**: `PLG-054`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
   - Add config option: `policy_source: "local" | "registry" | "merged"`
   - Default to "merged" for full functionality
 - **Acceptance Criteria**:
-  - [ ] Config schema updated
-  - [ ] Behavior matches selected mode
+  - [x] Config schema updated
+  - [x] Behavior matches selected mode
 
 #### 14.4 Policy Sync Tests
 - **ID**: `PLG-055`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
   - Tests for caching, TTL, and precedence rules
   - Tests for registry unavailable (fallback to local)
 - **Acceptance Criteria**:
-  - [ ] Policy cache and merge tested
-  - [ ] Error cases covered
+  - [x] Policy cache and merge tested
+  - [x] Error cases covered
 
 #### 14.5 Policy Sync Docs
 - **ID**: `PLG-056`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P2
 - **Notes**:
   - Document policy sources and precedence
   - Provide example configs
 - **Acceptance Criteria**:
-  - [ ] Docs cover policy sync options
-  - [ ] Example configs included
+  - [x] Docs cover policy sync options
+  - [x] Example configs included
 
 ---
 
@@ -1073,18 +1073,17 @@
 | Priority | Total | Pending | Blocked | In Progress | Done |
 |----------|-------|---------|---------|-------------|------|
 | P0       | 8     | 0       | 5       | 0           | 3    |
-| P1       | 16    | 5       | 0       | 0           | 11   |
+| P1       | 16    | 0       | 0       | 0           | 16   |
 | P2       | 8     | 5       | 0       | 0           | 3    |
-| **Total**| 32    | 10      | 5       | 0           | 17   |
+| **Total**| 32    | 5       | 5       | 0           | 22   |
 
 **High Priority (P0 Pending)**:
 - All P0 tasks complete (except blocked encryption tasks)
 
 **Completed (this session)**:
-- PLG-046-051: Group Messaging (all 6 tasks done)
+- PLG-052-056: Registry Policy Sync (all 5 tasks done)
 
 **Pending (registry already supports these)**:
-- PLG-052-056: Registry Policy Sync (registry has CRUD)
 - PLG-057-059: Trusted Routing (registry does routing by default)
 - PLG-065-066: Callback Secret Rotation (registry has `rotate_secret`)
 
@@ -1129,7 +1128,7 @@ Phase 1:
 Phase 2:
 - PLG-039 to PLG-045: E2E encryption - **BLOCKED** waiting on registry encryption spec
 - PLG-046 to PLG-051: Group messaging - **DONE** (client, tools, webhook, tests, docs)
-- PLG-052 to PLG-056: Policy sync - **PENDING** (registry already has policy CRUD!)
+- PLG-052 to PLG-056: Policy sync - **DONE** (client, merge, config, tests, docs)
 - PLG-057 to PLG-059: Trusted routing - **PENDING** (registry already does routing by default!)
 - PLG-060 to PLG-062: Agent runner - **DONE** (uses callGateway)
 - PLG-065 to PLG-066: Secret rotation - **PENDING** (registry supports `rotate_secret: true`!)
