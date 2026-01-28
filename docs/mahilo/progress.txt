@@ -123,7 +123,7 @@ The full message exchange loop is complete:
 - ✅ PLG-036: Tool documentation
 - ✅ PLG-037: Agent instructions template
 
-### Phase 2 (7 Complete, 20 Pending, 5 Blocked)
+### Phase 2 (11 Complete, 16 Pending, 5 Blocked)
 
 #### Completed
 - ✅ PLG-060: Agent runner integration (callGateway)
@@ -132,9 +132,12 @@ The full message exchange loop is complete:
 - ✅ PLG-043: Encryption config + capability negotiation
 - ✅ PLG-063: Callback URL auto-detection (tailscale support)
 - ✅ PLG-064: Persist callback_secret
+- ✅ PLG-067: Fetch LLM Policies from Registry
+- ✅ PLG-068: LLM Policy Evaluation Engine
+- ✅ PLG-069: LLM Policy Integration with Message Flow
+- ✅ PLG-070: LLM Policy Tests
 
 #### Pending (registry already supports these - just need plugin implementation)
-- PLG-067 to PLG-070: LLM policy enforcement (P0/P1)
 - PLG-046 to PLG-051: Group messaging (P1/P2)
 - PLG-052 to PLG-056: Registry policy sync (P1/P2)
 - PLG-057 to PLG-059: Trusted routing (P2)
