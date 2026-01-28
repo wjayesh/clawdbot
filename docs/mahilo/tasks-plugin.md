@@ -1,8 +1,8 @@
-# Clawdbot Mahilo Plugin: Phase 1 Tasks
+# Clawdbot Mahilo Plugin: Task Plan
 
 > **Project**: Clawdbot Mahilo Plugin (Extension)  
-> **Phase**: 1 - Core Integration  
-> **Goal**: Enable Clawdbot to send/receive messages via Mahilo network
+> **Phase**: 1 - Core Integration (mostly complete) + 2 - Secure Messaging and Registry Integration  
+> **Goal**: Enable Clawdbot to send/receive messages via the Mahilo network with a phased path to E2E encryption, group messaging, and trusted routing
 
 ---
 
@@ -19,6 +19,8 @@
 ---
 
 ## Task List
+
+## Phase 1 - Core Integration
 
 ### 1. Plugin Scaffold
 
@@ -621,14 +623,374 @@
 
 ---
 
+## Phase 2 - Secure Messaging + Registry Integration
+
+### 11. Secure Messaging (E2E + Sender Verification)
+
+#### 11.1 Define Encrypted Payload Schema + Versioning
+- **ID**: `PLG-039`
+- **Status**: `blocked`
+- **Priority**: P0
+- **Notes**:
+  - Align with Mahilo registry encrypted payload spec (cipher suite, key agreement, metadata fields).
+  - Define envelope versioning for backward compatibility.
+  - Document which fields remain plaintext (routing hints, recipient id).
+- **Acceptance Criteria**:
+  - [ ] Payload schema documented with field definitions
+  - [ ] Envelope versioning defined
+  - [ ] Plaintext vs encrypted field rules are explicit
+
+#### 11.2 Key Management + Discovery
+- **ID**: `PLG-040`
+- **Status**: `blocked`
+- **Priority**: P0
+- **Notes**:
+  - Persist local private key(s) in plugin state (reuse ed25519 keypair or migrate as required).
+  - Fetch recipient public keys from registry with caching + TTL.
+  - Define key rotation and invalid-key handling.
+- **Acceptance Criteria**:
+  - [ ] Local key storage + retrieval implemented
+  - [ ] Recipient key lookup with cache + TTL
+  - [ ] Rotation or invalid key handling defined
+
+#### 11.3 Outbound Encryption + Signing
+- **ID**: `PLG-041`
+- **Status**: `blocked`
+- **Priority**: P0
+- **Notes**:
+  - Encrypt message + context for recipient.
+  - Attach sender signature for authenticity.
+  - Allow plaintext fallback only when config permits.
+- **Acceptance Criteria**:
+  - [ ] Outbound payloads encrypted when enabled
+  - [ ] Sender signature attached and verifiable
+  - [ ] Clear error when strict encryption is required
+
+#### 11.4 Inbound Decryption + Sender Verification
+- **ID**: `PLG-042`
+- **Status**: `blocked`
+- **Priority**: P0
+- **Notes**:
+  - Verify sender signature using registry-provided public key.
+  - Decrypt before policy checks and formatting.
+  - Handle decryption failures without crashing the gateway.
+- **Acceptance Criteria**:
+  - [ ] Encrypted payloads decrypted and verified
+  - [ ] Policies run on decrypted plaintext
+  - [ ] Failure paths logged safely
+
+#### 11.5 Encryption Config + Capability Negotiation
+- **ID**: `PLG-043`
+- **Status**: `pending`
+- **Priority**: P1
+- **Notes**:
+  - Add config options: encryption_mode (off/opportunistic/required), allow_plaintext_fallback.
+  - Advertise encryption capability during registration.
+  - Update tool behavior based on mode.
+- **Acceptance Criteria**:
+  - [ ] Config schema updated with encryption settings
+  - [ ] Registration advertises encryption capability
+  - [ ] Tools respect mode + fallback rules
+
+#### 11.6 Encryption Test Coverage
+- **ID**: `PLG-044`
+- **Status**: `blocked`
+- **Priority**: P0
+- **Notes**:
+  - Unit tests for encrypt/decrypt helpers and signature verification.
+  - Integration tests for encrypted webhook flow.
+  - Negative tests for bad signatures, wrong keys, and replay.
+- **Acceptance Criteria**:
+  - [ ] Unit tests cover crypto helpers
+  - [ ] Webhook integration tests cover encrypted payloads
+  - [ ] Error paths covered
+
+#### 11.7 Encryption Documentation
+- **ID**: `PLG-045`
+- **Status**: `blocked`
+- **Priority**: P1
+- **Notes**:
+  - Document encryption modes, key requirements, and fallback behavior.
+  - Add key rotation guidance + troubleshooting.
+- **Acceptance Criteria**:
+  - [ ] Docs explain encryption modes
+  - [ ] Examples show config + expected behavior
+
+---
+
+### 12. Group Messaging (Registry Phase 2)
+
+#### 12.1 Mahilo Client: Group Endpoints
+- **ID**: `PLG-046`
+- **Status**: `blocked`
+- **Priority**: P1
+- **Notes**:
+  - Add client methods for listGroups, group membership, and sendGroupMessage.
+  - Normalize group-related error codes.
+- **Acceptance Criteria**:
+  - [ ] Client exposes group methods
+  - [ ] Group errors mapped to typed results
+
+#### 12.2 talk_to_group: Real Group Support
+- **ID**: `PLG-047`
+- **Status**: `blocked`
+- **Priority**: P1
+- **Notes**:
+  - Use group ids (not names) per registry guidance.
+  - Validate membership before sending when possible.
+  - Apply local + registry policies to group payloads.
+- **Acceptance Criteria**:
+  - [ ] Group messages send via registry
+  - [ ] Membership errors handled clearly
+  - [ ] Policies enforced for group sends
+
+#### 12.3 Webhook: Group Payload Handling
+- **ID**: `PLG-048`
+- **Status**: `blocked`
+- **Priority**: P1
+- **Notes**:
+  - Parse group_id/group_name metadata in inbound payloads.
+  - Format agent message with group context.
+- **Acceptance Criteria**:
+  - [ ] Group fields parsed and validated
+  - [ ] Formatted message includes group context
+
+#### 12.4 list_mahilo_contacts: Include Groups
+- **ID**: `PLG-049`
+- **Status**: `blocked`
+- **Priority**: P2
+- **Notes**:
+  - Add option to include groups alongside friends.
+  - Keep output readable (separate users vs groups).
+- **Acceptance Criteria**:
+  - [ ] Groups listed with ids + names
+  - [ ] Output remains readable
+
+#### 12.5 Group Messaging Tests
+- **ID**: `PLG-050`
+- **Status**: `blocked`
+- **Priority**: P1
+- **Notes**:
+  - Tests for talk_to_group success + error cases.
+  - Webhook tests for inbound group message formatting.
+- **Acceptance Criteria**:
+  - [ ] Tool tests cover group flows
+  - [ ] Webhook tests cover group payloads
+
+#### 12.6 Group Messaging Docs
+- **ID**: `PLG-051`
+- **Status**: `blocked`
+- **Priority**: P2
+- **Notes**:
+  - Document group setup, ids, and limitations.
+  - Update examples and troubleshooting.
+- **Acceptance Criteria**:
+  - [ ] Docs include group setup + usage
+  - [ ] Limitations documented
+
+---
+
+### 13. Registry Policy Sync
+
+#### 13.1 Mahilo Client: Policies API
+- **ID**: `PLG-052`
+- **Status**: `blocked`
+- **Priority**: P1
+- **Notes**:
+  - Implement policy fetch endpoints (global, per-user, per-group).
+  - Add caching with TTL and safe fallback behavior.
+- **Acceptance Criteria**:
+  - [ ] Policies fetched + cached
+  - [ ] Client errors handled gracefully
+
+#### 13.2 Policy Merge + Precedence
+- **ID**: `PLG-053`
+- **Status**: `blocked`
+- **Priority**: P1
+- **Notes**:
+  - Merge local policies with registry policies.
+  - Define precedence and conflict rules.
+  - Ensure inbound/outbound paths use merged policies.
+- **Acceptance Criteria**:
+  - [ ] Merge rules defined and documented
+  - [ ] Inbound/outbound enforcement uses merged policies
+
+#### 13.3 Policy Config Controls
+- **ID**: `PLG-054`
+- **Status**: `blocked`
+- **Priority**: P1
+- **Notes**:
+  - Add config options: local-only, registry-only, merged.
+  - Support per-user overrides if registry exposes them.
+- **Acceptance Criteria**:
+  - [ ] Config schema updated
+  - [ ] Behavior matches selected mode
+
+#### 13.4 Policy Sync Tests
+- **ID**: `PLG-055`
+- **Status**: `blocked`
+- **Priority**: P1
+- **Notes**:
+  - Tests for caching, TTL, and precedence rules.
+  - Tests for missing or invalid policy data.
+- **Acceptance Criteria**:
+  - [ ] Policy cache and merge tested
+  - [ ] Error cases covered
+
+#### 13.5 Policy Sync Docs
+- **ID**: `PLG-056`
+- **Status**: `blocked`
+- **Priority**: P2
+- **Notes**:
+  - Document policy sources and precedence.
+  - Provide example configs.
+- **Acceptance Criteria**:
+  - [ ] Docs cover policy sync options
+  - [ ] Example configs included
+
+---
+
+### 14. Trusted Routing (Optional)
+
+#### 14.1 Trusted Routing Config + Guardrails
+- **ID**: `PLG-057`
+- **Status**: `blocked`
+- **Priority**: P2
+- **Notes**:
+  - Add config flag for trusted routing.
+  - Block trusted routing when encryption is required.
+  - Log privacy warnings when enabled.
+- **Acceptance Criteria**:
+  - [ ] Config flag present with warnings
+  - [ ] Guardrails enforced when encryption required
+
+#### 14.2 Registry-Selected Connection Flow
+- **ID**: `PLG-058`
+- **Status**: `blocked`
+- **Priority**: P2
+- **Notes**:
+  - Allow sendMessage without recipient_connection_id when trusted routing enabled.
+  - Pass routing_hints and any plaintext required by registry.
+- **Acceptance Criteria**:
+  - [ ] Registry can select connection when enabled
+  - [ ] Sender-side routing remains default when disabled
+
+#### 14.3 Trusted Routing Tests + Docs
+- **ID**: `PLG-059`
+- **Status**: `blocked`
+- **Priority**: P2
+- **Notes**:
+  - Tests for trusted routing toggle + fallback.
+  - Docs explaining privacy trade-offs.
+- **Acceptance Criteria**:
+  - [ ] Tests cover trusted routing on/off
+  - [ ] Docs updated with privacy guidance
+
+---
+
+### 15. Agent Runner Integration
+
+#### 15.1 SDK Agent Runner Hook
+- **ID**: `PLG-060`
+- **Status**: `blocked`
+- **Priority**: P0
+- **Notes**:
+  - Replace logging stub with supported SDK call when available.
+  - Preserve non-blocking webhook behavior.
+- **Acceptance Criteria**:
+  - [ ] Inbound messages trigger actual agent runs
+  - [ ] Webhook remains non-blocking
+
+#### 15.2 Inbound Routing Config
+- **ID**: `PLG-061`
+- **Status**: `blocked`
+- **Priority**: P1
+- **Notes**:
+  - Configure target agent/session for inbound Mahilo messages.
+  - Allow per-connection routing defaults.
+- **Acceptance Criteria**:
+  - [ ] Config schema supports inbound target selection
+  - [ ] Messages route to expected session
+
+#### 15.3 Agent Runner Tests
+- **ID**: `PLG-062`
+- **Status**: `blocked`
+- **Priority**: P1
+- **Notes**:
+  - Tests for agent run invocation + metadata mapping.
+  - Tests for failure handling (no session, runner errors).
+- **Acceptance Criteria**:
+  - [ ] Agent run path covered by tests
+  - [ ] Failure cases handled
+
+---
+
+### 16. Operational Hardening
+
+#### 16.1 Callback URL Auto-Detection
+- **ID**: `PLG-063`
+- **Status**: `pending`
+- **Priority**: P1
+- **Notes**:
+  - Detect public gateway URL (not localhost) when available.
+  - Validate scheme/host and warn on unsafe values.
+- **Acceptance Criteria**:
+  - [ ] Auto-detection uses gateway/runtime config
+  - [ ] Validation + warnings in logs
+
+#### 16.2 Persist callback_secret
+- **ID**: `PLG-064`
+- **Status**: `pending`
+- **Priority**: P1
+- **Notes**:
+  - Store callback_secret in plugin state storage.
+  - Reuse on startup to avoid re-register unless missing.
+- **Acceptance Criteria**:
+  - [ ] callback_secret persisted and loaded
+  - [ ] Re-register only when missing or invalid
+
+#### 16.3 Callback Secret Rotation + Recovery
+- **ID**: `PLG-065`
+- **Status**: `blocked`
+- **Priority**: P2
+- **Notes**:
+  - Implement manual rotation (CLI or config flag).
+  - Handle registry rotate endpoint or fallback to re-register.
+- **Acceptance Criteria**:
+  - [ ] Rotation updates registry + local state
+  - [ ] Recovery path documented
+
+#### 16.4 Callback Secret Tests
+- **ID**: `PLG-066`
+- **Status**: `blocked`
+- **Priority**: P2
+- **Notes**:
+  - Tests for persistence, reload, and rotation.
+- **Acceptance Criteria**:
+  - [ ] Persistence tests cover restart scenarios
+  - [ ] Rotation tests cover re-register fallback
+
+---
+
 ## Summary
 
-| Priority | Total | Pending | In Progress | Done |
-|----------|-------|---------|-------------|------|
-| P0       | 29    | 0       | 1           | 28   |
-| P1       | 7     | 0       | 0           | 7    |
-| P2       | 2     | 0       | 0           | 2    |
-| **Total**| 38    | 1       | 0           | 37   |
+### Phase 1 - Core Integration
+
+| Priority | Total | Pending | Blocked | In Progress | Done |
+|----------|-------|---------|---------|-------------|------|
+| P0       | 29    | 0       | 0       | 1           | 28   |
+| P1       | 7     | 0       | 0       | 0           | 7    |
+| P2       | 2     | 0       | 0       | 0           | 2    |
+| **Total**| 38    | 0       | 0       | 1           | 37   |
+
+### Phase 2 - Secure Messaging + Registry Integration
+
+| Priority | Total | Pending | Blocked | In Progress | Done |
+|----------|-------|---------|---------|-------------|------|
+| P0       | 6     | 0       | 6       | 0           | 0    |
+| P1       | 14    | 3       | 11      | 0           | 0    |
+| P2       | 8     | 0       | 8       | 0           | 0    |
+| **Total**| 28    | 3       | 25      | 0           | 0    |
 
 ---
 
@@ -659,12 +1021,19 @@ PLG-001 (Directory Structure)
 
 ### External Dependencies
 
-| Task | Depends On |
-|------|------------|
-| PLG-010 (registerAgent) | REG-013 (Register Agent Endpoint) |
-| PLG-008 (sendMessage) | REG-021 (Send Message Endpoint) |
-| PLG-009 (getFriends) | REG-019 (List Friends Endpoint) |
-| PLG-034 (E2E Test) | Full Mahilo Registry |
+Phase 1:
+- PLG-008 (sendMessage) depends on the registry send message endpoint
+- PLG-009 (getFriends) depends on the registry friends endpoint
+- PLG-010 (registerAgent) depends on the registry agents endpoint
+- PLG-034 (E2E Test) depends on a running registry
+
+Phase 2:
+- PLG-039 to PLG-045 depend on registry encryption spec + key lookup endpoints
+- PLG-046 to PLG-051 depend on registry group endpoints + group message payloads
+- PLG-052 to PLG-056 depend on registry policy endpoints
+- PLG-057 to PLG-059 depend on trusted routing support in the registry
+- PLG-060 to PLG-062 depend on a plugin SDK agent runner API
+- PLG-065 to PLG-066 depend on callback secret rotation support (or a re-register fallback)
 
 ---
 

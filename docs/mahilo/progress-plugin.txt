@@ -7,7 +7,7 @@ Last Updated: 2026-01-28
 
 ## Current Focus
 
-Phase 1 Core Implementation - **97% Complete (37/38 tasks, 1 in progress)**
+Phase 1 Core Implementation - **100% Complete (38/38 tasks)**
 
 ## Key Files
 
@@ -19,16 +19,18 @@ Phase 1 Core Implementation - **97% Complete (37/38 tasks, 1 in progress)**
 
 | Priority | Total | Pending | In Progress | Done |
 |----------|-------|---------|-------------|------|
-| P0       | 29    | 0       | 1           | 28   |
+| P0       | 29    | 0       | 0           | 29   |
 | P1       | 7     | 0       | 0           | 7    |
 | P2       | 2     | 0       | 0           | 2    |
-| **Total**| 38    | 1       | 0           | 37   |
+| **Total**| 38    | 0       | 0           | 38   |
 
 ## Remaining Tasks
 
-1. **PLG-034** (P0): E2E Test - Full Message Exchange
-   - Status: In progress (awaiting registry runtime)
-   - Implemented test harness; requires running registry + two Clawdbot instances
+None - Phase 1 complete!
+
+**PLG-034** (P0): E2E Test - Full Message Exchange ✅
+- Test passes: registry delivers message to plugin webhook
+- Gateway logs show receipt and message content
 
 ## Dependencies
 
@@ -134,3 +136,20 @@ All tests in `extensions/mahilo/tests/`:
 **Blocked:**
 - Bun install failed (brew returned exit 1; bun.sh install failed DNS)
 - OrbStack app missing executable; Docker engine not available
+
+### Session 7 (2026-01-28)
+
+**Completed:**
+- Installed Bun via Homebrew (`brew install oven-sh/bun/bun`)
+- Started Mahilo registry (`bun run dev` in ../mahilo-2)
+- Diagnosed root cause: `gateway_start` hook defined but never called in gateway server
+- Refactored plugin to use `registerService` instead of `api.on("gateway_start", ...)`
+  - Services run after HTTP server is listening (correct timing for webhook registration)
+  - Reads port from `ctx.config.gateway.port` or uses `callback_url_override`
+- **E2E test passes**: Full message flow verified (Alice → Registry → Bob's webhook)
+- All 132 unit tests still pass
+
+**Key insight:**
+The `gateway_start` typed hook is implemented in `src/plugins/hooks.ts` but `runGatewayStart()`
+is never called anywhere. Plugin services are the correct mechanism for post-startup initialization
+since their `start()` method runs after HTTP is listening.
