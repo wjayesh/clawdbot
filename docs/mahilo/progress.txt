@@ -8,7 +8,7 @@ Last Updated: 2026-01-28
 ## Current Status
 
 **Phase 1**: 38/38 tasks complete (100%) ✅
-**Phase 2**: 6/28 tasks complete (21%) - remaining blocked on registry features
+**Phase 2**: 6/32 tasks complete (19%) - 4 pending (LLM policies), 22 blocked on registry
 
 ## What Works Today
 
@@ -40,12 +40,16 @@ The full message exchange loop is complete:
 
 ### Phase 2 - Secure Messaging + Registry Integration
 
-| Priority | Total | Done | Blocked |
-|----------|-------|------|---------|
-| P0       | 6     | 1    | 5       |
-| P1       | 14    | 5    | 9       |
-| P2       | 8     | 0    | 8       |
-| **Total**| 28    | 6    | 22      |
+| Priority | Total | Done | Pending | Blocked |
+|----------|-------|------|---------|---------|
+| P0       | 8     | 1    | 2       | 5       |
+| P1       | 16    | 5    | 2       | 9       |
+| P2       | 8     | 0    | 0       | 8       |
+| **Total**| 32    | 6    | 4       | 22      |
+
+**High Priority Pending (P0)**:
+- PLG-067: LLM Policy Evaluation Engine
+- PLG-068: LLM Policy Configuration
 
 ---
 
@@ -249,6 +253,9 @@ extensions/mahilo/
 
 ## Next Steps
 
-1. Update `talk_to_group` to use registry's group messaging (registry supports it)
-2. E2E encryption when registry spec is finalized
-3. Group messaging client updates when needed
+1. **LLM Policy Enforcement** (PLG-067, PLG-068) - P0 priority
+   - Implement semantic filtering for outbound/inbound messages
+   - Support configurable policy prompts
+2. Update `talk_to_group` to use registry's group messaging (registry supports it)
+3. E2E encryption (registry already supports the metadata - plugin can implement)
+4. Group messaging client updates when needed
