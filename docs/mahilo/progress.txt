@@ -1,0 +1,254 @@
+# Mahilo Plugin Development Progress
+
+Started: 2026-01-27
+Last Updated: 2026-01-28
+
+---
+
+## Current Status
+
+**Phase 1**: 38/38 tasks complete (100%) ✅
+**Phase 2**: 6/28 tasks complete (21%) - remaining blocked on registry features
+
+## What Works Today
+
+The full message exchange loop is complete:
+1. Alice's agent calls `talk_to_agent("bob", "Hello!")`
+2. Registry delivers to Bob's callback URL with HMAC signature
+3. Bob's plugin verifies signature, deduplicates, applies policies
+4. `callGateway({ method: "agent" })` triggers an actual agent run
+5. Bob's agent processes the message and can respond via `talk_to_agent`
+
+---
+
+## Key Files
+
+- `docs/mahilo/plugin-design.md` - Full design specification
+- `docs/mahilo/tasks-plugin.md` - Task tracking with priorities
+- `docs/mahilo/AGENT-INSTRUCTIONS.md` - Template for agent configuration
+
+## Task Summary
+
+### Phase 1 - Core Integration
+
+| Priority | Total | Done |
+|----------|-------|------|
+| P0       | 29    | 29   |
+| P1       | 7     | 7    |
+| P2       | 2     | 2    |
+| **Total**| 38    | 38   |
+
+### Phase 2 - Secure Messaging + Registry Integration
+
+| Priority | Total | Done | Blocked |
+|----------|-------|------|---------|
+| P0       | 6     | 1    | 5       |
+| P1       | 14    | 5    | 9       |
+| P2       | 8     | 0    | 8       |
+| **Total**| 28    | 6    | 22      |
+
+---
+
+## Completed Implementation
+
+### Phase 1 (All Complete)
+
+#### 1. Plugin Scaffold (4/4)
+- ✅ PLG-001: Plugin directory structure (`extensions/mahilo/`)
+- ✅ PLG-002: Plugin manifest (`moltbot.plugin.json`)
+- ✅ PLG-003: `package.json` with peer dependencies
+- ✅ PLG-004: Plugin entry point with full registration
+
+#### 2. Configuration (2/2)
+- ✅ PLG-005: Configuration schema with all fields
+- ✅ PLG-006: Config loading and validation
+
+#### 3. Mahilo API Client (5/5)
+- ✅ PLG-007: HTTP client with retry logic, timeouts
+- ✅ PLG-008: sendMessage() with all parameters
+- ✅ PLG-009: getFriends() and getContactConnections()
+- ✅ PLG-010: registerAgent() with auto-registration
+- ✅ PLG-011: Callback URL detection with override
+
+#### 4. Tools Implementation (4/4)
+- ✅ PLG-012: `talk_to_agent` tool with routing selection
+- ✅ PLG-013: Tool response formatting
+- ✅ PLG-014: `list_mahilo_contacts` tool
+- ✅ PLG-015: Tool registration via plugin API
+- ✅ PLG-038: `talk_to_group` tool
+
+#### 5. Webhook Handler (4/4)
+- ✅ PLG-016: HMAC-SHA256 signature verification (raw body)
+- ✅ PLG-017: Webhook route registration
+- ✅ PLG-018: Incoming message handler with dedup
+- ✅ PLG-019: Body parsing and validation
+
+#### 6. Agent Run Triggering (3/3)
+- ✅ PLG-020: Message formatting for agent
+- ✅ PLG-021: Agent runner via `callGateway({ method: "agent" })`
+- ✅ PLG-022: Error handling for agent runs
+
+#### 7. Local Policy Filter (3/3)
+- ✅ PLG-023: Basic policy checks (length, keywords, patterns)
+- ✅ PLG-024: Policy configuration loading
+- ✅ PLG-025: Policy violation feedback
+
+#### 8. Plugin Lifecycle (3/3)
+- ✅ PLG-026: `register()` hook with initialization
+- ✅ PLG-027: Cleanup via service stop
+- ✅ PLG-028: Graceful degradation for errors
+
+#### 9. Testing (6/6)
+- ✅ PLG-029: Unit tests for Mahilo client
+- ✅ PLG-030: Unit tests for signature verification
+- ✅ PLG-031: Unit tests for local policies
+- ✅ PLG-032: Unit tests for tools
+- ✅ PLG-033: Integration tests for webhook handler
+- ✅ PLG-034: E2E test (full message exchange verified)
+
+#### 10. Documentation (3/3)
+- ✅ PLG-035: Plugin README
+- ✅ PLG-036: Tool documentation
+- ✅ PLG-037: Agent instructions template
+
+### Phase 2 (6 Complete, 22 Blocked)
+
+#### Completed
+- ✅ PLG-060: Agent runner integration (callGateway)
+- ✅ PLG-061: Inbound routing config (session_key, agent_id)
+- ✅ PLG-062: Agent runner tests
+- ✅ PLG-043: Encryption config + capability negotiation
+- ✅ PLG-063: Callback URL auto-detection (tailscale support)
+- ✅ PLG-064: Persist callback_secret
+
+#### Blocked (waiting on registry features)
+- PLG-039 to PLG-045: E2E encryption (needs registry spec)
+- PLG-046 to PLG-051: Group messaging client updates
+- PLG-052 to PLG-056: Registry policy sync
+- PLG-057 to PLG-059: Trusted routing
+- PLG-065 to PLG-066: Callback secret rotation
+
+---
+
+## Files Created
+
+```
+extensions/mahilo/
+├── index.ts                     # Plugin entry point
+├── moltbot.plugin.json          # Plugin manifest
+├── package.json                 # Package config
+├── tsconfig.json                # TypeScript config
+├── README.md                    # Documentation
+├── src/
+│   ├── types.ts                 # Type definitions
+│   ├── config.ts                # Configuration handling
+│   ├── keys.ts                  # Ed25519 keypair management
+│   ├── state.ts                 # Plugin state persistence
+│   ├── callback-url.ts          # Callback URL detection
+│   ├── client/
+│   │   ├── index.ts
+│   │   └── mahilo-api.ts        # Mahilo Registry client
+│   ├── tools/
+│   │   ├── index.ts
+│   │   ├── talk-to-agent.ts     # talk_to_agent tool
+│   │   ├── talk-to-group.ts     # talk_to_group tool
+│   │   └── list-contacts.ts     # list_mahilo_contacts tool
+│   ├── webhook/
+│   │   ├── index.ts
+│   │   ├── handler.ts           # Webhook request handler
+│   │   ├── signature.ts         # HMAC signature verification
+│   │   ├── dedup.ts             # Message deduplication
+│   │   └── trigger-agent.ts     # Agent run triggering
+│   └── policy/
+│       ├── index.ts
+│       └── local-filter.ts      # Local policy enforcement
+└── tests/
+    ├── client.test.ts           # API client tests (28 tests)
+    ├── signature.test.ts        # Signature verification (12 tests)
+    ├── policy.test.ts           # Policy filter tests (20 tests)
+    ├── dedup.test.ts            # Deduplication tests (7 tests)
+    ├── tools.test.ts            # Tool tests (47 tests)
+    ├── webhook.test.ts          # Webhook handler tests (18 tests)
+    ├── trigger-agent.test.ts    # Agent triggering tests (13 tests)
+    ├── state.test.ts            # State persistence tests (9 tests)
+    ├── callback-url.test.ts     # Callback URL tests (17 tests)
+    └── config.test.ts           # Config validation tests (17 tests)
+```
+
+**Total: 188 tests passing**
+
+---
+
+## Findings Addressed
+
+- ✅ HIGH-1: Raw body signature verification
+- ✅ HIGH-2: Message deduplication by message_id
+- ✅ MED-1: Consistent API paths with /api/v1 prefix
+- ✅ MED-5: Inbound policy filtering
+- ✅ MED-7: Correct acknowledgement format
+- ⏳ CRIT-1: E2E encryption (Phase 2)
+
+---
+
+## Session Log
+
+### Session 1 (2026-01-27)
+- Created full plugin directory structure
+- Implemented plugin manifest with config schema
+- Created Mahilo API client with retry logic
+- Implemented `talk_to_agent` and `list_mahilo_contacts` tools
+- Implemented webhook handler with signature verification and dedup
+- Implemented local policy filter
+- Created unit tests for core components
+- Created comprehensive README
+
+### Session 2 (2026-01-27)
+- Created comprehensive unit tests for Mahilo client
+- Created unit tests for tools
+- Created integration tests for webhook handler
+- Created agent instructions template
+- Updated 35 of 37 tasks to done
+
+### Session 3 (2026-01-27)
+- Reviewed and verified all plugin implementation
+- Fixed test mocks
+- All 119 tests passing
+
+### Session 4 (2026-01-28)
+- Added talk_to_group tool implementation + tests
+- Updated docs and task tracking
+
+### Session 5 (2026-01-28)
+- Added Mahilo registry keypair generation
+- Added E2E test harness
+
+### Session 6 (2026-01-28)
+- Wrote registry + E2E handover doc
+
+### Session 7 (2026-01-28)
+- Installed Bun, started Mahilo registry
+- Diagnosed gateway_start hook issue
+- Refactored to use `registerService` instead of hook
+- **E2E test passes**: Full message flow verified
+- All 132 tests pass
+
+### Session 8 (2026-01-28)
+- Implemented agent runner integration (PLG-060, 061, 062)
+- Used `callGateway({ method: "agent" })` for actual agent runs
+- Added inbound routing config (session_key, agent_id)
+- All 145 tests pass
+
+### Session 9 (2026-01-28)
+- Implemented PLG-064: Persist callback_secret (state.ts)
+- Implemented PLG-063: Callback URL auto-detection (tailscale support)
+- Implemented PLG-043: Encryption config + capability negotiation
+- Created tests for state, callback-url, and config
+- All 188 tests pass
+
+---
+
+## Next Steps
+
+1. Update `talk_to_group` to use registry's group messaging (registry supports it)
+2. E2E encryption when registry spec is finalized
+3. Group messaging client updates when needed
