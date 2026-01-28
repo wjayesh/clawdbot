@@ -9,3 +9,10 @@ export {
   createLlmPolicyEvaluator,
   type LlmPolicyEvaluatorConfig,
 } from "./llm-evaluator.js";
+export {
+  mergeHeuristicRules,
+  mergeOutboundPolicies,
+  mergeInboundPolicies,
+  applyMergedHeuristicRules,
+  type MergedHeuristicRules,
+} from "./merge.js";

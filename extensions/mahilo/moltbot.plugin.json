@@ -100,6 +100,41 @@
             "description": "Allow plaintext fallback when opportunistic encryption fails"
           }
         }
+      },
+      "llm_policies": {
+        "type": "object",
+        "description": "LLM-based policy evaluation settings",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable LLM policy evaluation"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider to use for LLM evaluation (e.g., anthropic, openai)"
+          },
+          "model": {
+            "type": "string",
+            "description": "Model to use for evaluation"
+          },
+          "timeout_ms": {
+            "type": "number",
+            "default": 15000,
+            "description": "Timeout for each policy evaluation in milliseconds"
+          },
+          "cache_ttl_ms": {
+            "type": "number",
+            "default": 300000,
+            "description": "Policy cache TTL in milliseconds"
+          }
+        }
+      },
+      "policy_source": {
+        "type": "string",
+        "enum": ["local", "registry", "merged"],
+        "default": "merged",
+        "description": "Policy source mode: local (config only), registry (remote only), merged (both, local takes precedence)"
       }
     },
     "required": []
