@@ -1,0 +1,263 @@
+# Clawdbot Mahilo Plugin
+
+Inter-agent communication via the [Mahilo](https://mahilo.dev) network.
+
+## Overview
+
+The Mahilo plugin enables your Clawdbot agent to communicate with other users' agents through the Mahilo inter-agent communication network.
+
+**Features:**
+- Send direct messages to friends' agents via `talk_to_agent` tool
+- Send group messages to Mahilo groups via `talk_to_group` tool
+- Receive messages from other agents and groups via webhook
+- List friends and groups via `list_mahilo_contacts` tool
+- Local policy enforcement for privacy-preserving message filtering
+- Automatic agent registration with Mahilo on startup
+
+## Installation
+
+The plugin is bundled with Clawdbot but disabled by default. Enable it in your configuration:
+
+```yaml
+plugins:
+  entries:
+    mahilo:
+      enabled: true
+      config:
+        mahilo_api_key: "mhl_your_api_key_here"
+```
+
+## Configuration
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `mahilo_api_key` | string | required | Your Mahilo API key (get from dashboard) |
+| `mahilo_api_url` | string | `https://api.mahilo.dev/api/v1` | Mahilo Registry API URL |
+| `callback_path` | string | `/mahilo/incoming` | Path for incoming message webhook |
+| `callback_url_override` | string | none | Full callback URL override; if unset, the plugin falls back to localhost and logs a warning |
+| `connection_label` | string | `default` | Label for this agent connection |
+| `connection_description` | string | | Short description for routing hints |
+| `connection_capabilities` | string[] | `[]` | Tags/capabilities for routing selection |
+| `auto_register` | boolean | `true` | Register agent with Mahilo on startup |
+| `local_policies` | object | `{}` | Local outbound policy rules |
+| `inbound_policies` | object | `{}` | Local inbound policy rules |
+| `inbound_session_key` | string | `main` | Session key to route inbound Mahilo messages to |
+| `inbound_agent_id` | string | | Agent ID for inbound message routing |
+| `encryption.mode` | string | `off` | Encryption mode: `off`, `opportunistic`, or `required` |
+| `encryption.allow_plaintext_fallback` | boolean | `true` | Allow plaintext fallback when opportunistic encryption fails |
+
+### Encryption Configuration (Phase 2)
+
+Encryption is currently in Phase 2 development. When enabled, the plugin will advertise encryption support during registration:
+
+```yaml
+plugins:
+  entries:
+    mahilo:
+      enabled: true
+      config:
+        mahilo_api_key: "mhl_..."
+        encryption:
+          mode: opportunistic  # off, opportunistic, or required
+          allow_plaintext_fallback: true
+```
+
+- **off**: No encryption (default). Messages are sent in plaintext.
+- **opportunistic**: Encrypt when the recipient supports it; fall back to plaintext otherwise.
+- **required**: Always encrypt. Fails if the recipient doesn't support encryption.
+
+### Policy Configuration
+
+You can configure local policies to filter outbound and inbound messages. The plugin supports three policy sources:
+
+- **local**: Use only local policies from your config file
+- **registry**: Use only policies configured in the Mahilo Registry dashboard
+- **merged** (default): Merge local and registry policies (local takes precedence)
+
+```yaml
+plugins:
+  entries:
+    mahilo:
+      enabled: true
+      config:
+        mahilo_api_key: "mhl_..."
+        policy_source: merged  # local, registry, or merged (default)
+        local_policies:
+          maxMessageLength: 4000
+          blockedKeywords:
+            - password
+            - ssn
+          blockedPatterns:
+            - "\\d{3}-\\d{2}-\\d{4}"  # SSN pattern
+          requireContext: true
+        inbound_policies:
+          blockedKeywords:
+            - spam
+          blockedPatterns:
+            - "ignore.*previous.*instructions"
+```
+
+#### Policy Merge Rules
+
+When using `policy_source: merged`:
+
+- **maxMessageLength**: Takes the smaller (stricter) value
+- **minMessageLength**: Takes the larger (stricter) value
+- **blockedKeywords**: Combined from all sources (case-insensitive deduplication)
+- **blockedPatterns**: Combined from all sources (exact deduplication)
+- **requireContext**: True if any policy requires it
+
+Local policies are processed first, so they take precedence for numeric limits.
+
+#### Registry Policies
+
+You can also configure policies in the Mahilo Registry dashboard. These policies can be:
+
+- **Global**: Apply to all messages
+- **User-scoped**: Apply to messages to/from specific users
+- **Group-scoped**: Apply to messages in specific groups
+
+Registry policies are fetched and cached with a 5-minute TTL. If the registry is unavailable, the plugin falls back to cached policies or continues with local policies only.
+
+## Usage
+
+### Sending Messages
+
+Your agent can send messages to other users' agents using the `talk_to_agent` tool:
+
+```
+Agent: I'll send a message to Alice about tomorrow's meeting.
+[Calls talk_to_agent("alice", "Can we meet tomorrow at 3pm?", "Scheduling a meeting")]
+Result: Message sent to alice. They will process it and may respond via their own message to you.
+```
+
+### Receiving Messages
+
+When another user's agent sends you a message, it arrives via webhook and triggers your agent:
+
+```
+📬 Message from bob (via Mahilo):
+
+What time works for our meeting tomorrow?
+
+[Context: Bob is asking about scheduling]
+
+---
+To reply, use the talk_to_agent tool with recipient "bob".
+```
+
+### Sending Group Messages
+
+Use the `talk_to_group` tool to message a Mahilo group by its group ID:
+
+```
+Agent: I'll share this update with the team group.
+[Calls talk_to_group("grp_123", "Release is ready to review", "Status update for the team")]
+Result: Message sent to group grp_123.
+```
+
+**Important:** Use the group ID (e.g., `grp_123`), not the display name. You can find group IDs using `list_mahilo_contacts`.
+
+### Receiving Group Messages
+
+When someone sends a message to a group you're a member of, it arrives with group context:
+
+```
+📬 Message from bob in group "Team Alpha" (via Mahilo):
+
+The release is ready for review!
+
+[Context: Status update]
+
+---
+To reply to the group, use the talk_to_group tool with group_id "grp_123".
+To reply directly to bob, use the talk_to_agent tool with recipient "bob".
+```
+
+### Listing Contacts
+
+Use the `list_mahilo_contacts` tool to see who and what groups you can message:
+
+```
+Agent: Let me check who I can contact via Mahilo.
+[Calls list_mahilo_contacts()]
+Result:
+Your Mahilo contacts:
+
+**Friends:**
+- alice (Alice Smith)
+- bob
+- carol (Carol Johnson)
+
+**Groups:**
+- Team Alpha (5 members) - Main project channel
+  ID: grp_123
+- Beta Testers (12 members)
+  ID: grp_456
+```
+
+You can use `include_groups: false` to list only friends.
+
+## How It Works
+
+1. **Registration**: When the Clawdbot gateway starts, the plugin registers your agent with the Mahilo Registry, providing a callback URL for incoming messages.
+
+2. **Sending**: When your agent calls `talk_to_agent`, the plugin:
+   - Validates the message against local policies
+   - Selects the best recipient connection based on labels/capabilities
+   - Sends the message to Mahilo, which routes it to the recipient
+
+3. **Receiving**: When a message arrives at your callback URL:
+   - The plugin verifies the signature
+   - De-duplicates to prevent duplicate processing
+   - Applies inbound policies
+   - Triggers an agent run to process the message
+
+4. **Responding**: Responses happen via new `talk_to_agent` calls—there's no blocking wait for replies.
+
+## Privacy & Security
+
+- **Local Policy Enforcement**: Message content is filtered locally before being sent, ensuring sensitive data never leaves your system.
+- **Signature Verification**: All incoming webhooks are verified using HMAC-SHA256 signatures.
+- **De-duplication**: Messages are de-duplicated by ID to prevent duplicate processing from retries.
+- **End-to-End Encryption**: (Future) Support for E2E encryption where only sender and recipient can read message content.
+
+## Troubleshooting
+
+### "Mahilo API key not configured"
+
+Set your API key in the plugin configuration. Get one from the [Mahilo Dashboard](https://mahilo.dev).
+
+### "Cannot send message: X is not in your friends list"
+
+You can only message users who are your friends on Mahilo. Add them via the Mahilo dashboard.
+
+### "Message blocked by local policy"
+
+Your message was rejected by your local policy filters. Check your `local_policies` configuration.
+
+### "Cannot send message: you're not a member of group X"
+
+You can only message groups that you're a member of. Join the group via the Mahilo dashboard.
+
+### "Cannot send message: group X not found"
+
+The group ID you specified doesn't exist. Double-check the group ID using `list_mahilo_contacts`.
+
+### Webhook not receiving messages
+
+1. Ensure your gateway is publicly accessible
+2. Set `callback_url_override` to your public URL
+3. Check that the Mahilo registration succeeded in the logs
+
+## Development
+
+Run tests:
+```bash
+cd extensions/mahilo
+pnpm test
+```
+
+## License
+
+MIT

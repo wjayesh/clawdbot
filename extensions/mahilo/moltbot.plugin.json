@@ -1,0 +1,142 @@
+{
+  "id": "mahilo",
+  "name": "Mahilo",
+  "description": "Inter-agent communication via Mahilo network",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "mahilo_api_key": {
+        "type": "string",
+        "description": "Your Mahilo API key (get from dashboard)"
+      },
+      "mahilo_api_url": {
+        "type": "string",
+        "default": "https://api.mahilo.dev/api/v1",
+        "description": "Mahilo Registry API URL"
+      },
+      "callback_path": {
+        "type": "string",
+        "default": "/mahilo/incoming",
+        "description": "Path for incoming message webhook"
+      },
+      "callback_url_override": {
+        "type": "string",
+        "description": "Full callback URL if auto-detection fails"
+      },
+      "connection_label": {
+        "type": "string",
+        "default": "default",
+        "description": "Label for this agent connection (e.g., work, personal)"
+      },
+      "connection_description": {
+        "type": "string",
+        "description": "Short description used for routing hints"
+      },
+      "connection_capabilities": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [],
+        "description": "Tags/capabilities for routing selection"
+      },
+      "auto_register": {
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically register agent with Mahilo on startup"
+      },
+      "local_policies": {
+        "type": "object",
+        "description": "Local outbound policy rules",
+        "properties": {
+          "maxMessageLength": { "type": "number" },
+          "minMessageLength": { "type": "number" },
+          "blockedKeywords": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "blockedPatterns": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "requireContext": { "type": "boolean" }
+        }
+      },
+      "inbound_policies": {
+        "type": "object",
+        "description": "Local inbound policy rules",
+        "properties": {
+          "blockedKeywords": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "blockedPatterns": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "inbound_session_key": {
+        "type": "string",
+        "default": "main",
+        "description": "Session key to route inbound Mahilo messages to"
+      },
+      "inbound_agent_id": {
+        "type": "string",
+        "description": "Agent ID for inbound message routing (if not set, uses default agent)"
+      },
+      "encryption": {
+        "type": "object",
+        "description": "Encryption settings for Mahilo messages (Phase 2 feature)",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["off", "opportunistic", "required"],
+            "default": "off",
+            "description": "Encryption mode: off (plaintext), opportunistic (encrypt if supported), required (always encrypt)"
+          },
+          "allow_plaintext_fallback": {
+            "type": "boolean",
+            "default": true,
+            "description": "Allow plaintext fallback when opportunistic encryption fails"
+          }
+        }
+      },
+      "llm_policies": {
+        "type": "object",
+        "description": "LLM-based policy evaluation settings",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable LLM policy evaluation"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider to use for LLM evaluation (e.g., anthropic, openai)"
+          },
+          "model": {
+            "type": "string",
+            "description": "Model to use for evaluation"
+          },
+          "timeout_ms": {
+            "type": "number",
+            "default": 15000,
+            "description": "Timeout for each policy evaluation in milliseconds"
+          },
+          "cache_ttl_ms": {
+            "type": "number",
+            "default": 300000,
+            "description": "Policy cache TTL in milliseconds"
+          }
+        }
+      },
+      "policy_source": {
+        "type": "string",
+        "enum": ["local", "registry", "merged"],
+        "default": "merged",
+        "description": "Policy source mode: local (config only), registry (remote only), merged (both, local takes precedence)"
+      }
+    },
+    "required": []
+  }
+}

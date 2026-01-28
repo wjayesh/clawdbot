@@ -1,0 +1,372 @@
+# Mahilo Plugin Development Progress
+
+Started: 2026-01-27
+Last Updated: 2026-01-28
+
+---
+
+## Current Status
+
+**Phase 1**: 38/38 tasks complete (100%) ✅
+**Phase 2**: 22/32 tasks complete (69%) - 5 pending, 5 blocked on registry encryption spec
+
+## What Works Today
+
+The full message exchange loop is complete:
+1. Alice's agent calls `talk_to_agent("bob", "Hello!")`
+2. Registry delivers to Bob's callback URL with HMAC signature
+3. Bob's plugin verifies signature, deduplicates, applies policies
+4. `callGateway({ method: "agent" })` triggers an actual agent run
+5. Bob's agent processes the message and can respond via `talk_to_agent`
+
+---
+
+## Key Files
+
+- `docs/mahilo/plugin-design.md` - Full design specification
+- `docs/mahilo/tasks-plugin.md` - Task tracking with priorities
+- `docs/mahilo/AGENT-INSTRUCTIONS.md` - Template for agent configuration
+
+## Task Summary
+
+### Phase 1 - Core Integration
+
+| Priority | Total | Done |
+|----------|-------|------|
+| P0       | 29    | 29   |
+| P1       | 7     | 7    |
+| P2       | 2     | 2    |
+| **Total**| 38    | 38   |
+
+### Phase 2 - Secure Messaging + Registry Integration
+
+| Priority | Total | Done | Pending | Blocked |
+|----------|-------|------|---------|---------|
+| P0       | 8     | 3    | 0       | 5       |
+| P1       | 16    | 16   | 0       | 0       |
+| P2       | 8     | 3    | 5       | 0       |
+| **Total**| 32    | 22   | 5       | 5       |
+
+**Completed (this session)**:
+- Policy sync (PLG-052-056) - all 5 tasks complete
+
+**Pending (registry already supports these)**:
+- Trusted routing (PLG-057-059) - registry does routing by default
+- Secret rotation (PLG-065-066) - registry has `rotate_secret: true`
+
+**Blocked (needs registry encryption spec)**:
+- E2E encryption (PLG-039-042, PLG-044-045)
+
+---
+
+## Completed Implementation
+
+### Phase 1 (All Complete)
+
+#### 1. Plugin Scaffold (4/4)
+- ✅ PLG-001: Plugin directory structure (`extensions/mahilo/`)
+- ✅ PLG-002: Plugin manifest (`moltbot.plugin.json`)
+- ✅ PLG-003: `package.json` with peer dependencies
+- ✅ PLG-004: Plugin entry point with full registration
+
+#### 2. Configuration (2/2)
+- ✅ PLG-005: Configuration schema with all fields
+- ✅ PLG-006: Config loading and validation
+
+#### 3. Mahilo API Client (5/5)
+- ✅ PLG-007: HTTP client with retry logic, timeouts
+- ✅ PLG-008: sendMessage() with all parameters
+- ✅ PLG-009: getFriends() and getContactConnections()
+- ✅ PLG-010: registerAgent() with auto-registration
+- ✅ PLG-011: Callback URL detection with override
+
+#### 4. Tools Implementation (4/4)
+- ✅ PLG-012: `talk_to_agent` tool with routing selection
+- ✅ PLG-013: Tool response formatting
+- ✅ PLG-014: `list_mahilo_contacts` tool
+- ✅ PLG-015: Tool registration via plugin API
+- ✅ PLG-038: `talk_to_group` tool
+
+#### 5. Webhook Handler (4/4)
+- ✅ PLG-016: HMAC-SHA256 signature verification (raw body)
+- ✅ PLG-017: Webhook route registration
+- ✅ PLG-018: Incoming message handler with dedup
+- ✅ PLG-019: Body parsing and validation
+
+#### 6. Agent Run Triggering (3/3)
+- ✅ PLG-020: Message formatting for agent
+- ✅ PLG-021: Agent runner via `callGateway({ method: "agent" })`
+- ✅ PLG-022: Error handling for agent runs
+
+#### 7. Local Policy Filter (3/3)
+- ✅ PLG-023: Basic policy checks (length, keywords, patterns)
+- ✅ PLG-024: Policy configuration loading
+- ✅ PLG-025: Policy violation feedback
+
+#### 8. Plugin Lifecycle (3/3)
+- ✅ PLG-026: `register()` hook with initialization
+- ✅ PLG-027: Cleanup via service stop
+- ✅ PLG-028: Graceful degradation for errors
+
+#### 9. Testing (6/6)
+- ✅ PLG-029: Unit tests for Mahilo client
+- ✅ PLG-030: Unit tests for signature verification
+- ✅ PLG-031: Unit tests for local policies
+- ✅ PLG-032: Unit tests for tools
+- ✅ PLG-033: Integration tests for webhook handler
+- ✅ PLG-034: E2E test (full message exchange verified)
+
+#### 10. Documentation (3/3)
+- ✅ PLG-035: Plugin README
+- ✅ PLG-036: Tool documentation
+- ✅ PLG-037: Agent instructions template
+
+### Phase 2 (22 Complete, 5 Pending, 5 Blocked)
+
+#### Completed
+- ✅ PLG-060: Agent runner integration (callGateway)
+- ✅ PLG-061: Inbound routing config (session_key, agent_id)
+- ✅ PLG-062: Agent runner tests
+- ✅ PLG-043: Encryption config + capability negotiation
+- ✅ PLG-063: Callback URL auto-detection (tailscale support)
+- ✅ PLG-064: Persist callback_secret
+- ✅ PLG-067: Fetch LLM Policies from Registry
+- ✅ PLG-068: LLM Policy Evaluation Engine
+- ✅ PLG-069: LLM Policy Integration with Message Flow
+- ✅ PLG-070: LLM Policy Tests
+- ✅ PLG-046: Mahilo Client: Group Endpoints
+- ✅ PLG-047: talk_to_group: Real Group Support
+- ✅ PLG-048: Webhook: Group Payload Handling
+- ✅ PLG-049: list_mahilo_contacts: Include Groups
+- ✅ PLG-050: Group Messaging Tests
+- ✅ PLG-051: Group Messaging Docs
+- ✅ PLG-052: Mahilo Client: Heuristic Policies API
+- ✅ PLG-053: Policy Merge + Precedence
+- ✅ PLG-054: Policy Config Controls
+- ✅ PLG-055: Policy Sync Tests
+- ✅ PLG-056: Policy Sync Docs
+
+#### Pending (registry already supports these - just need plugin implementation)
+- PLG-057 to PLG-059: Trusted routing (P2)
+- PLG-065 to PLG-066: Callback secret rotation (P2)
+
+#### Blocked (waiting on registry encryption spec)
+- PLG-039 to PLG-042, PLG-044-045: E2E encryption
+
+---
+
+## Files Created
+
+```
+extensions/mahilo/
+├── index.ts                     # Plugin entry point
+├── moltbot.plugin.json          # Plugin manifest
+├── package.json                 # Package config
+├── tsconfig.json                # TypeScript config
+├── README.md                    # Documentation
+├── src/
+│   ├── types.ts                 # Type definitions
+│   ├── config.ts                # Configuration handling
+│   ├── keys.ts                  # Ed25519 keypair management
+│   ├── state.ts                 # Plugin state persistence
+│   ├── callback-url.ts          # Callback URL detection
+│   ├── client/
+│   │   ├── index.ts
+│   │   └── mahilo-api.ts        # Mahilo Registry client
+│   ├── tools/
+│   │   ├── index.ts
+│   │   ├── talk-to-agent.ts     # talk_to_agent tool
+│   │   ├── talk-to-group.ts     # talk_to_group tool
+│   │   └── list-contacts.ts     # list_mahilo_contacts tool
+│   ├── webhook/
+│   │   ├── index.ts
+│   │   ├── handler.ts           # Webhook request handler
+│   │   ├── signature.ts         # HMAC signature verification
+│   │   ├── dedup.ts             # Message deduplication
+│   │   └── trigger-agent.ts     # Agent run triggering
+│   └── policy/
+│       ├── index.ts
+│       ├── local-filter.ts      # Local policy enforcement
+│       ├── llm-evaluator.ts     # LLM-based policy evaluation
+│       └── merge.ts             # Policy merge + precedence logic
+└── tests/
+    ├── client.test.ts           # API client tests (67 tests)
+    ├── signature.test.ts        # Signature verification (12 tests)
+    ├── policy.test.ts           # Policy filter tests (20 tests)
+    ├── dedup.test.ts            # Deduplication tests (7 tests)
+    ├── tools.test.ts            # Tool tests (62 tests)
+    ├── webhook.test.ts          # Webhook handler tests (23 tests)
+    ├── trigger-agent.test.ts    # Agent triggering tests (19 tests)
+    ├── state.test.ts            # State persistence tests (9 tests)
+    ├── callback-url.test.ts     # Callback URL tests (17 tests)
+    ├── config.test.ts           # Config validation tests (17 tests)
+    ├── llm-evaluator.test.ts    # LLM policy evaluator tests (21 tests)
+    └── merge.test.ts            # Policy merge tests (37 tests)
+```
+
+**Total: 311 tests passing**
+
+---
+
+## Findings Addressed
+
+- ✅ HIGH-1: Raw body signature verification
+- ✅ HIGH-2: Message deduplication by message_id
+- ✅ MED-1: Consistent API paths with /api/v1 prefix
+- ✅ MED-5: Inbound policy filtering
+- ✅ MED-7: Correct acknowledgement format
+- ⏳ CRIT-1: E2E encryption (Phase 2)
+
+---
+
+## Session Log
+
+### Session 1 (2026-01-27)
+- Created full plugin directory structure
+- Implemented plugin manifest with config schema
+- Created Mahilo API client with retry logic
+- Implemented `talk_to_agent` and `list_mahilo_contacts` tools
+- Implemented webhook handler with signature verification and dedup
+- Implemented local policy filter
+- Created unit tests for core components
+- Created comprehensive README
+
+### Session 2 (2026-01-27)
+- Created comprehensive unit tests for Mahilo client
+- Created unit tests for tools
+- Created integration tests for webhook handler
+- Created agent instructions template
+- Updated 35 of 37 tasks to done
+
+### Session 3 (2026-01-27)
+- Reviewed and verified all plugin implementation
+- Fixed test mocks
+- All 119 tests passing
+
+### Session 4 (2026-01-28)
+- Added talk_to_group tool implementation + tests
+- Updated docs and task tracking
+
+### Session 5 (2026-01-28)
+- Added Mahilo registry keypair generation
+- Added E2E test harness
+
+### Session 6 (2026-01-28)
+- Wrote registry + E2E handover doc
+
+### Session 7 (2026-01-28)
+- Installed Bun, started Mahilo registry
+- Diagnosed gateway_start hook issue
+- Refactored to use `registerService` instead of hook
+- **E2E test passes**: Full message flow verified
+- All 132 tests pass
+
+### Session 8 (2026-01-28)
+- Implemented agent runner integration (PLG-060, 061, 062)
+- Used `callGateway({ method: "agent" })` for actual agent runs
+- Added inbound routing config (session_key, agent_id)
+- All 145 tests pass
+
+### Session 9 (2026-01-28)
+- Implemented PLG-064: Persist callback_secret (state.ts)
+- Implemented PLG-063: Callback URL auto-detection (tailscale support)
+- Implemented PLG-043: Encryption config + capability negotiation
+- Created tests for state, callback-url, and config
+- All 188 tests pass
+
+### Session 10 (2026-01-28)
+- Implemented PLG-067: Fetch LLM Policies from Registry
+  - Added LLM policy types (LlmPolicy, LlmPolicyScope, LlmPolicyDirection)
+  - Added `getLlmPolicies()` client method with caching (5-min TTL)
+  - Added `getApplicablePolicies()` for filtering by direction/target
+  - Added 17 tests for policy fetching and caching
+- Implemented PLG-068: LLM Policy Evaluation Engine
+  - Created `llm-evaluator.ts` with policy evaluation logic
+  - Uses embedded runner for LLM calls (keeps message content private)
+  - Supports fail-open/fail-closed behavior per policy
+  - Created `evaluatePolicy()` and `evaluatePolicies()` functions
+  - Added `createLlmPolicyEvaluator()` factory for reusable evaluators
+  - Added 21 tests for evaluation logic
+- Updated config types with `llm_policies` settings (enabled, provider, model, timeout)
+- All 226 mahilo tests pass
+
+### Session 11 (2026-01-28)
+- Implemented PLG-069: LLM Policy Integration with Message Flow
+  - Integrated LLM policy evaluation into `talk_to_agent` tool
+  - Integrated LLM policy evaluation into `talk_to_group` tool
+  - Integrated LLM policy evaluation into webhook handler for inbound messages
+  - LLM policies run after static policies (cheaper filtering first)
+  - Clear rejection messages that don't leak policy details
+  - Fail-open behavior at integration level (individual policies can fail-closed)
+- Implemented PLG-070: LLM Policy Tests
+  - Added 8 tests for LLM policy integration in tools (talk_to_agent, talk_to_group)
+  - Added 5 tests for LLM policy integration in webhook handler
+  - Tests cover: policy evaluation, blocking, disabled state, error handling
+- All 239 mahilo tests pass
+
+### Session 12 (2026-01-28)
+- Implemented PLG-046: Mahilo Client Group Endpoints
+  - Added Group and GroupMember types
+  - Added getGroups(), getGroup(), getGroupMembers() client methods
+  - Added IncomingMessage group_id/group_name fields for inbound group messages
+- Implemented PLG-047: talk_to_group Real Group Support
+  - Tool already had full group support via sendMessage with recipient_type: "group"
+  - Verified error handling for GROUP_NOT_FOUND, NOT_GROUP_MEMBER
+- Implemented PLG-048: Webhook Group Payload Handling
+  - Updated formatIncomingMessage to include group context
+  - Updated buildExtraSystemPrompt for group messages
+  - Updated metadata logging with group info
+  - Added group policy context for LLM policy evaluation
+- Implemented PLG-049: list_mahilo_contacts Include Groups
+  - Added include_groups parameter (default true)
+  - Groups displayed with name, member count, description, and ID
+  - Graceful error handling if groups API fails
+- Implemented PLG-050: Group Messaging Tests
+  - Added client tests for getGroups, getGroup, getGroupMembers, sendMessage to group
+  - Added trigger-agent tests for group message formatting
+  - Added tools tests for list_mahilo_contacts with groups
+  - All 259 mahilo tests pass
+- Implemented PLG-051: Group Messaging Docs
+  - Updated README with group messaging documentation
+  - Added receiving group messages section
+  - Added group troubleshooting entries
+  - Updated list_mahilo_contacts documentation
+
+### Session 13 (2026-01-28)
+- Implemented PLG-052: Mahilo Client Heuristic Policies API
+  - Added HeuristicPolicy, HeuristicPolicyRules types
+  - Added getHeuristicPolicies() and getApplicableHeuristicPolicies() client methods
+  - Added caching with TTL and graceful fallback on registry errors
+  - Added 15 tests for heuristic policy fetching
+- Implemented PLG-053: Policy Merge + Precedence
+  - Created policy/merge.ts with merge logic
+  - mergeHeuristicRules() combines rules from multiple sources
+  - Local policies take precedence (stricter numeric limits)
+  - Combined blocked keywords/patterns with deduplication
+- Implemented PLG-054: Policy Config Controls
+  - Added policy_source config option: "local" | "registry" | "merged"
+  - Updated moltbot.plugin.json schema
+  - Default: "merged" for full functionality
+- Implemented PLG-055: Policy Sync Tests
+  - Created merge.test.ts with 37 tests
+  - Tests for merge rules, precedence, mode switching
+  - Tests for outbound/inbound policy application
+- Implemented PLG-056: Policy Sync Docs
+  - Updated README with policy source options
+  - Documented merge rules and registry policies
+  - Added example configurations
+- All 311 mahilo tests pass
+
+---
+
+## Next Steps (Priority Order)
+
+1. **Trusted Routing** (PLG-057-059) - P2
+   - Registry does routing by default - add config controls
+
+2. **Callback Secret Rotation** (PLG-065-066) - P2
+   - Registry supports `rotate_secret: true` - add CLI/config support
+
+3. **E2E Encryption** (PLG-039-045) - P0 but BLOCKED
+   - Registry stores encryption metadata but spec not finalized
+   - Plugin can implement once spec is ready
