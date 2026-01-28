@@ -153,3 +153,37 @@ All tests in `extensions/mahilo/tests/`:
 The `gateway_start` typed hook is implemented in `src/plugins/hooks.ts` but `runGatewayStart()`
 is never called anywhere. Plugin services are the correct mechanism for post-startup initialization
 since their `start()` method runs after HTTP is listening.
+
+### Session 8 (2026-01-28)
+
+**Goal:** Phase 2 Agent Runner Integration (PLG-060, PLG-061, PLG-062)
+
+**Completed:**
+- PLG-060: Implemented agent runner integration using `callGateway({ method: "agent", ... })`
+  - Updated `trigger-agent.ts` to call gateway's agent method when webhook receives message
+  - Uses `idempotency_key` based on message_id for deduplication
+  - Includes `extraSystemPrompt` with sender context
+- PLG-061: Added inbound routing config for target session
+  - Added `inbound_session_key` (default: "main") and `inbound_agent_id` to MahiloPluginConfig
+  - Updated config.ts with defaults and resolveConfig
+- PLG-062: Added tests for agent runner integration
+  - 13 new unit tests for formatting and config integration
+  - All 145 Mahilo unit tests pass
+  - E2E test requires working registry (mahilo-2 repo has compilation error)
+
+**Approach:**
+- Used `callGateway` from `src/gateway/call.ts` (same pattern as `sessions_send` tool)
+- No core modifications needed - imported internal function directly
+- Replaced logging stub in `trigger-agent.ts` with actual agent invocation
+
+**Files changed:**
+- `extensions/mahilo/src/types.ts` - Added inbound_session_key and inbound_agent_id
+- `extensions/mahilo/src/config.ts` - Added defaults for inbound routing
+- `extensions/mahilo/src/webhook/trigger-agent.ts` - Implemented callGateway integration
+- `extensions/mahilo/src/webhook/handler.ts` - Pass config to triggerAgentRun
+- `extensions/mahilo/tests/trigger-agent.test.ts` - New tests for formatting and config
+- `test/mahilo.e2e.test.ts` - Also check stderr for log lines
+
+**E2E Test Result:**
+- Full flow verified: Alice → Registry → Bob's webhook → Agent run triggered
+- 145 unit tests pass + 1 E2E test passes

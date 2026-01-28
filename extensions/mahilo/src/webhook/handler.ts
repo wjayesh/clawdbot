@@ -116,7 +116,7 @@ export function createWebhookHandler(ctx: HandlerContext) {
 
     // Trigger agent run asynchronously (after response is sent)
     setImmediate(() => {
-      triggerAgentRun(body, { logger: ctx.logger }).catch((error) => {
+      triggerAgentRun(body, { logger: ctx.logger, config }).catch((error) => {
         ctx.logger.error(`[Mahilo] Failed to trigger agent run for message ${body.message_id}: ${error}`);
       });
     });

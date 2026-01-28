@@ -2,13 +2,17 @@
  * Agent Run Triggering
  *
  * Triggers an agent run to process incoming Mahilo messages.
+ * Uses callGateway to invoke the gateway's agent method.
  */
 
-import type { IncomingMessage } from "../types.js";
+import { callGateway } from "../../../../src/gateway/call.js";
 import type { PluginLogger } from "../../../../src/plugins/types.js";
+
+import type { IncomingMessage, MahiloPluginConfig } from "../types.js";
 
 export interface TriggerAgentContext {
   logger: PluginLogger;
+  config: MahiloPluginConfig;
 }
 
 /**
@@ -28,43 +32,88 @@ export function formatIncomingMessage(incoming: IncomingMessage): string {
 }
 
 /**
+ * Build extra system prompt context for the agent.
+ */
+function buildExtraSystemPrompt(incoming: IncomingMessage): string {
+  return [
+    `You are receiving a message from another agent via the Mahilo network.`,
+    `Sender: ${incoming.sender}`,
+    incoming.sender_agent ? `Sender Agent: ${incoming.sender_agent}` : null,
+    `To reply, use the talk_to_agent tool with recipient "${incoming.sender}".`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+export interface TriggerAgentResult {
+  ok: boolean;
+  runId?: string;
+  error?: string;
+}
+
+/**
  * Trigger an agent run to process the incoming message.
  *
  * This is called asynchronously after the webhook has acknowledged receipt.
- * The actual agent run implementation depends on the Clawdbot infrastructure.
- *
- * For Phase 1, we log the message and store it for manual review.
- * Full integration with the agent runner will be added when the infrastructure
- * is ready.
+ * Uses callGateway to invoke the gateway's agent method, which triggers
+ * an actual agent run with the formatted message.
  */
 export async function triggerAgentRun(
   incoming: IncomingMessage,
   ctx: TriggerAgentContext,
-): Promise<void> {
+): Promise<TriggerAgentResult> {
   const formattedMessage = formatIncomingMessage(incoming);
 
-  // Log the incoming message
   ctx.logger.info(`[Mahilo] Received message from ${incoming.sender}: ${incoming.message_id}`);
+  ctx.logger.info(`[Mahilo] Message: ${incoming.message}`);
 
-  // TODO: Integrate with Clawdbot's agent run infrastructure
-  // This will use the cron/isolated-agent infrastructure or similar
-  // to trigger an actual agent run with the formatted message.
-  //
-  // For now, we just log the formatted message.
-  // The user can configure a cron job or manual trigger to process
-  // Mahilo messages from the logs.
+  // Determine target session
+  const sessionKey = ctx.config.inbound_session_key ?? "main";
+  const agentId = ctx.config.inbound_agent_id;
 
-  ctx.logger.info(`[Mahilo] Message content:\n${formattedMessage}`);
+  // Use the Mahilo message_id as idempotency key to prevent duplicate processing
+  const idempotencyKey = `mahilo-${incoming.message_id}`;
 
-  // Store metadata for tracking
-  const metadata = {
-    source: "mahilo",
-    mahilo_message_id: incoming.message_id,
-    mahilo_correlation_id: incoming.correlation_id,
-    mahilo_sender: incoming.sender,
-    mahilo_sender_agent: incoming.sender_agent,
-    received_at: new Date().toISOString(),
-  };
+  try {
+    const response = (await callGateway({
+      method: "agent",
+      params: {
+        message: formattedMessage,
+        sessionKey,
+        ...(agentId ? { agentId } : {}),
+        idempotencyKey,
+        deliver: false, // Don't auto-deliver to channels
+        extraSystemPrompt: buildExtraSystemPrompt(incoming),
+      },
+      timeoutMs: 10_000, // 10 second timeout for accepting the run
+    })) as { runId?: string; acceptedAt?: number };
 
-  ctx.logger.info(`[Mahilo] Message metadata: ${JSON.stringify(metadata)}`);
+    const runId = typeof response?.runId === "string" ? response.runId : idempotencyKey;
+
+    ctx.logger.info(`[Mahilo] Agent run triggered: runId=${runId}, sessionKey=${sessionKey}`);
+
+    // Log metadata for tracking
+    const metadata = {
+      source: "mahilo",
+      mahilo_message_id: incoming.message_id,
+      mahilo_correlation_id: incoming.correlation_id,
+      mahilo_sender: incoming.sender,
+      mahilo_sender_agent: incoming.sender_agent,
+      run_id: runId,
+      session_key: sessionKey,
+      received_at: new Date().toISOString(),
+    };
+
+    ctx.logger.info(`[Mahilo] Message metadata: ${JSON.stringify(metadata)}`);
+
+    return { ok: true, runId };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    ctx.logger.error(`[Mahilo] Failed to trigger agent run: ${errorMessage}`);
+
+    // Log the message content for manual recovery
+    ctx.logger.warn(`[Mahilo] Unprocessed message from ${incoming.sender}:\n${formattedMessage}`);
+
+    return { ok: false, error: errorMessage };
+  }
 }

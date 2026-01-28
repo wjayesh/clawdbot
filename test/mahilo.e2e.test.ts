@@ -245,7 +245,7 @@ async function stopGatewayInstance(inst: GatewayInstance) {
 async function waitForLog(inst: GatewayInstance, needle: string, timeoutMs = 15_000) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
-    const haystack = inst.stdout.join("");
+    const haystack = inst.stdout.join("") + inst.stderr.join("");
     if (haystack.includes(needle)) return;
     await sleep(100);
   }

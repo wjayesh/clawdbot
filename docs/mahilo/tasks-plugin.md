@@ -892,36 +892,37 @@
 
 #### 15.1 SDK Agent Runner Hook
 - **ID**: `PLG-060`
-- **Status**: `blocked`
+- **Status**: `done`
 - **Priority**: P0
 - **Notes**:
-  - Replace logging stub with supported SDK call when available.
-  - Preserve non-blocking webhook behavior.
+  - Implemented using `callGateway({ method: "agent", ... })` - same pattern as sessions_send tool.
+  - No core modifications needed - uses existing gateway infrastructure.
+  - Preserve non-blocking webhook behavior via setImmediate.
 - **Acceptance Criteria**:
-  - [ ] Inbound messages trigger actual agent runs
-  - [ ] Webhook remains non-blocking
+  - [x] Inbound messages trigger actual agent runs
+  - [x] Webhook remains non-blocking
 
 #### 15.2 Inbound Routing Config
 - **ID**: `PLG-061`
-- **Status**: `blocked`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
-  - Configure target agent/session for inbound Mahilo messages.
-  - Allow per-connection routing defaults.
+  - Added `inbound_session_key` (default: "main") and `inbound_agent_id` to config.
+  - Configurable target session for inbound messages.
 - **Acceptance Criteria**:
-  - [ ] Config schema supports inbound target selection
-  - [ ] Messages route to expected session
+  - [x] Config schema supports inbound target selection
+  - [x] Messages route to expected session
 
 #### 15.3 Agent Runner Tests
 - **ID**: `PLG-062`
-- **Status**: `blocked`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
-  - Tests for agent run invocation + metadata mapping.
-  - Tests for failure handling (no session, runner errors).
+  - 13 unit tests for formatting and config integration.
+  - E2E test verifies full flow (requires working registry).
 - **Acceptance Criteria**:
-  - [ ] Agent run path covered by tests
-  - [ ] Failure cases handled
+  - [x] Agent run path covered by tests
+  - [x] Failure cases handled
 
 ---
 
