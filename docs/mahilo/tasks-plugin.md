@@ -726,72 +726,72 @@
 
 #### 12.1 Mahilo Client: Group Endpoints
 - **ID**: `PLG-046`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
   - Registry already supports: `GET /api/v1/groups`, `POST /api/v1/messages/send` with `recipient_type: "group"`
   - Add client methods for listGroups, group membership, and sendGroupMessage
   - Normalize group-related error codes
 - **Acceptance Criteria**:
-  - [ ] Client exposes group methods
-  - [ ] Group errors mapped to typed results
+  - [x] Client exposes group methods
+  - [x] Group errors mapped to typed results
 
 #### 12.2 talk_to_group: Real Group Support
 - **ID**: `PLG-047`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
   - Use group ids (not names) per registry guidance
-  - The existing talk_to_group tool returns 501 - update to use registry
+  - The existing talk_to_group tool already uses registry with `recipient_type: "group"`
   - Apply local + registry policies to group payloads
 - **Acceptance Criteria**:
-  - [ ] Group messages send via registry
-  - [ ] Membership errors handled clearly
-  - [ ] Policies enforced for group sends
+  - [x] Group messages send via registry
+  - [x] Membership errors handled clearly
+  - [x] Policies enforced for group sends
 
 #### 12.3 Webhook: Group Payload Handling
 - **ID**: `PLG-048`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
   - Parse group_id/group_name metadata in inbound payloads
   - Format agent message with group context
 - **Acceptance Criteria**:
-  - [ ] Group fields parsed and validated
-  - [ ] Formatted message includes group context
+  - [x] Group fields parsed and validated
+  - [x] Formatted message includes group context
 
 #### 12.4 list_mahilo_contacts: Include Groups
 - **ID**: `PLG-049`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P2
 - **Notes**:
   - Add option to include groups alongside friends
   - Keep output readable (separate users vs groups)
 - **Acceptance Criteria**:
-  - [ ] Groups listed with ids + names
-  - [ ] Output remains readable
+  - [x] Groups listed with ids + names
+  - [x] Output remains readable
 
 #### 12.5 Group Messaging Tests
 - **ID**: `PLG-050`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
   - Tests for talk_to_group success + error cases
   - Webhook tests for inbound group message formatting
 - **Acceptance Criteria**:
-  - [ ] Tool tests cover group flows
-  - [ ] Webhook tests cover group payloads
+  - [x] Tool tests cover group flows
+  - [x] Webhook tests cover group payloads
 
 #### 12.6 Group Messaging Docs
 - **ID**: `PLG-051`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P2
 - **Notes**:
   - Document group setup, ids, and limitations
   - Update examples and troubleshooting
 - **Acceptance Criteria**:
-  - [ ] Docs include group setup + usage
-  - [ ] Limitations documented
+  - [x] Docs include group setup + usage
+  - [x] Limitations documented
 
 ---
 
@@ -1073,15 +1073,17 @@
 | Priority | Total | Pending | Blocked | In Progress | Done |
 |----------|-------|---------|---------|-------------|------|
 | P0       | 8     | 0       | 5       | 0           | 3    |
-| P1       | 16    | 9       | 0       | 0           | 7    |
-| P2       | 8     | 7       | 0       | 0           | 1    |
-| **Total**| 32    | 16      | 5       | 0           | 11   |
+| P1       | 16    | 5       | 0       | 0           | 11   |
+| P2       | 8     | 5       | 0       | 0           | 3    |
+| **Total**| 32    | 10      | 5       | 0           | 17   |
 
 **High Priority (P0 Pending)**:
 - All P0 tasks complete (except blocked encryption tasks)
 
+**Completed (this session)**:
+- PLG-046-051: Group Messaging (all 6 tasks done)
+
 **Pending (registry already supports these)**:
-- PLG-046-051: Group Messaging (registry has groups)
 - PLG-052-056: Registry Policy Sync (registry has CRUD)
 - PLG-057-059: Trusted Routing (registry does routing by default)
 - PLG-065-066: Callback Secret Rotation (registry has `rotate_secret`)
@@ -1126,7 +1128,7 @@ Phase 1:
 
 Phase 2:
 - PLG-039 to PLG-045: E2E encryption - **BLOCKED** waiting on registry encryption spec
-- PLG-046 to PLG-051: Group messaging - **PENDING** (registry already supports groups!)
+- PLG-046 to PLG-051: Group messaging - **DONE** (client, tools, webhook, tests, docs)
 - PLG-052 to PLG-056: Policy sync - **PENDING** (registry already has policy CRUD!)
 - PLG-057 to PLG-059: Trusted routing - **PENDING** (registry already does routing by default!)
 - PLG-060 to PLG-062: Agent runner - **DONE** (uses callGateway)

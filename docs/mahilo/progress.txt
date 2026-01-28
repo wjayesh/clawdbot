@@ -8,7 +8,7 @@ Last Updated: 2026-01-28
 ## Current Status
 
 **Phase 1**: 38/38 tasks complete (100%) ✅
-**Phase 2**: 11/32 tasks complete (34%) - 16 pending, 5 blocked on registry encryption spec
+**Phase 2**: 17/32 tasks complete (53%) - 10 pending, 5 blocked on registry encryption spec
 
 ## What Works Today
 
@@ -43,15 +43,14 @@ The full message exchange loop is complete:
 | Priority | Total | Done | Pending | Blocked |
 |----------|-------|------|---------|---------|
 | P0       | 8     | 3    | 0       | 5       |
-| P1       | 16    | 7    | 9       | 0       |
-| P2       | 8     | 1    | 7       | 0       |
-| **Total**| 32    | 11   | 16      | 5       |
+| P1       | 16    | 11   | 5       | 0       |
+| P2       | 8     | 3    | 5       | 0       |
+| **Total**| 32    | 17   | 10      | 5       |
 
-**High Priority Pending (P0)**:
-- All P0 tasks complete (except blocked encryption tasks)
+**Completed (this session)**:
+- Group messaging (PLG-046-051) - all 6 tasks complete
 
 **Pending (registry already supports these)**:
-- Group messaging (PLG-046-051) - registry has full group support
 - Policy sync (PLG-052-056) - registry has policy CRUD
 - Trusted routing (PLG-057-059) - registry does routing by default
 - Secret rotation (PLG-065-066) - registry has `rotate_secret: true`
@@ -123,7 +122,7 @@ The full message exchange loop is complete:
 - ✅ PLG-036: Tool documentation
 - ✅ PLG-037: Agent instructions template
 
-### Phase 2 (11 Complete, 16 Pending, 5 Blocked)
+### Phase 2 (17 Complete, 10 Pending, 5 Blocked)
 
 #### Completed
 - ✅ PLG-060: Agent runner integration (callGateway)
@@ -136,9 +135,14 @@ The full message exchange loop is complete:
 - ✅ PLG-068: LLM Policy Evaluation Engine
 - ✅ PLG-069: LLM Policy Integration with Message Flow
 - ✅ PLG-070: LLM Policy Tests
+- ✅ PLG-046: Mahilo Client: Group Endpoints
+- ✅ PLG-047: talk_to_group: Real Group Support
+- ✅ PLG-048: Webhook: Group Payload Handling
+- ✅ PLG-049: list_mahilo_contacts: Include Groups
+- ✅ PLG-050: Group Messaging Tests
+- ✅ PLG-051: Group Messaging Docs
 
 #### Pending (registry already supports these - just need plugin implementation)
-- PLG-046 to PLG-051: Group messaging (P1/P2)
 - PLG-052 to PLG-056: Registry policy sync (P1/P2)
 - PLG-057 to PLG-059: Trusted routing (P2)
 - PLG-065 to PLG-066: Callback secret rotation (P2)
@@ -295,21 +299,47 @@ extensions/mahilo/
   - Tests cover: policy evaluation, blocking, disabled state, error handling
 - All 239 mahilo tests pass
 
+### Session 12 (2026-01-28)
+- Implemented PLG-046: Mahilo Client Group Endpoints
+  - Added Group and GroupMember types
+  - Added getGroups(), getGroup(), getGroupMembers() client methods
+  - Added IncomingMessage group_id/group_name fields for inbound group messages
+- Implemented PLG-047: talk_to_group Real Group Support
+  - Tool already had full group support via sendMessage with recipient_type: "group"
+  - Verified error handling for GROUP_NOT_FOUND, NOT_GROUP_MEMBER
+- Implemented PLG-048: Webhook Group Payload Handling
+  - Updated formatIncomingMessage to include group context
+  - Updated buildExtraSystemPrompt for group messages
+  - Updated metadata logging with group info
+  - Added group policy context for LLM policy evaluation
+- Implemented PLG-049: list_mahilo_contacts Include Groups
+  - Added include_groups parameter (default true)
+  - Groups displayed with name, member count, description, and ID
+  - Graceful error handling if groups API fails
+- Implemented PLG-050: Group Messaging Tests
+  - Added client tests for getGroups, getGroup, getGroupMembers, sendMessage to group
+  - Added trigger-agent tests for group message formatting
+  - Added tools tests for list_mahilo_contacts with groups
+  - All 259 mahilo tests pass
+- Implemented PLG-051: Group Messaging Docs
+  - Updated README with group messaging documentation
+  - Added receiving group messages section
+  - Added group troubleshooting entries
+  - Updated list_mahilo_contacts documentation
+
 ---
 
 ## Next Steps (Priority Order)
 
-1. **Group Messaging** (PLG-046-051) - P1
-   - Registry already supports groups - just wire up the plugin client
-   - Update talk_to_group to use registry (currently returns 501)
-   - Add list groups support to list_mahilo_contacts
-
-2. **Policy Sync** (PLG-052-056) - P1
+1. **Policy Sync** (PLG-052-056) - P1
    - Registry already has policy CRUD - plugin needs to fetch and merge
    - Merge local policies with registry policies
 
-3. **Trusted Routing** (PLG-057-059) - P2
+2. **Trusted Routing** (PLG-057-059) - P2
    - Registry does routing by default - add config controls
+
+3. **Callback Secret Rotation** (PLG-065-066) - P2
+   - Registry supports `rotate_secret: true` - add CLI/config support
 
 4. **E2E Encryption** (PLG-039-045) - P0 but BLOCKED
    - Registry stores encryption metadata but spec not finalized
