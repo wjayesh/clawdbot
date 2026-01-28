@@ -113,6 +113,8 @@ export class MahiloClient {
         return ErrorCodes.USER_NOT_FOUND;
       case 429:
         return ErrorCodes.RATE_LIMITED;
+      case 501:
+        return ErrorCodes.NOT_IMPLEMENTED;
       default:
         return ErrorCodes.NETWORK_ERROR;
     }

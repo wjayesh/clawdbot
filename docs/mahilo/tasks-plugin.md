@@ -39,7 +39,7 @@
 - **Status**: `done`
 - **Priority**: P0
 - **Notes**: 
-  - `clawdbot.plugin.json` with:
+  - `moltbot.plugin.json` with:
     - id (required)
     - configSchema (required, JSON Schema)
     - name/description/version (optional metadata)
@@ -162,7 +162,7 @@
   - POST /api/v1/agents
   - Triggered on gateway_start if auto_register=true
   - Payload: framework="clawdbot", callback_url, label, description, capabilities
-  - Keypair and E2E fields are Phase 2
+  - Registry requires public_key + public_key_alg; generate/persist an ed25519 keypair in state
   - Store callback_secret for verification (in memory; persistence is future work)
 - **Acceptance Criteria**:
   - [ ] Registers agent with Mahilo
@@ -232,7 +232,22 @@
   - [ ] Lists friends with usernames
   - [ ] Clear formatting
 
-#### 4.4 Tool Registration with Clawdbot
+#### 4.4 Implement talk_to_group Tool (Optional)
+- **ID**: `PLG-038`
+- **Status**: `done`
+- **Priority**: P2
+- **Notes**:
+  - Parameters: group_id, message, context
+  - Use recipient_type: "group"
+  - Apply local policies before sending
+  - Handle group errors (GROUP_NOT_FOUND, NOT_GROUP_MEMBER)
+- **Acceptance Criteria**:
+  - [ ] Tool callable by agent
+  - [ ] Validates inputs
+  - [ ] Applies local policies
+  - [ ] Returns clear messages
+
+#### 4.5 Tool Registration with Clawdbot
 - **ID**: `PLG-015`
 - **Status**: `done`
 - **Priority**: P0
@@ -549,13 +564,13 @@
 
 #### 9.6 E2E Test: Full Message Exchange
 - **ID**: `PLG-034`
-- **Status**: `pending`
+- **Status**: `in-progress`
 - **Priority**: P0
-- **Blocked By**: Mahilo Registry ready
 - **Notes**: 
   - Requires running Mahilo Registry
   - Two Clawdbot instances
   - Send message, verify receipt, verify response
+  - Implemented in `test/mahilo.e2e.test.ts`; still needs a running registry to execute
 - **Acceptance Criteria**:
   - [ ] Full roundtrip works
   - [ ] Both instances receive messages
@@ -610,10 +625,10 @@
 
 | Priority | Total | Pending | In Progress | Done |
 |----------|-------|---------|-------------|------|
-| P0       | 27    | 1       | 0           | 26   |
-| P1       | 8     | 0       | 0           | 8    |
-| P2       | 2     | 1       | 0           | 1    |
-| **Total**| 37    | 2       | 0           | 35   |
+| P0       | 29    | 0       | 1           | 28   |
+| P1       | 7     | 0       | 0           | 7    |
+| P2       | 2     | 0       | 0           | 2    |
+| **Total**| 38    | 1       | 0           | 37   |
 
 ---
 
@@ -658,14 +673,14 @@ PLG-001 (Directory Structure)
 ### Integration Points with Clawdbot
 
 1. **Plugin SDK**: Use existing plugin infrastructure for registration
-2. **Route Registration**: Hook into gateway's route system
-3. **Tool Registration**: Follow existing tool patterns
-4. **Agent Triggering**: Use isolated-agent/cron infrastructure
+2. **Route Registration**: Use `api.registerHttpRoute` and Node req/res handling
+3. **Tool Registration**: Follow existing tool patterns (TypeBox + `execute(_id, params)`)
+4. **Agent Triggering**: No public SDK API yet; Phase 1 logs only
 5. **Config System**: Use Clawdbot's config loading
 
 ### Files to Reference
 
 - `extensions/discord/` - Similar plugin structure
-- `src/cron/isolated-agent/run.ts` - Agent triggering
-- `src/gateway/` - Route registration patterns
-- `src/tools/` - Tool implementation patterns
+- `extensions/llm-task/` - Tool implementation patterns
+- `src/gateway/server/plugins-http.ts` - Route registration behavior
+- `src/plugins/types.ts` - Plugin API surface
