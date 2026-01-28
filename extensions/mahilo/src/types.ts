@@ -19,6 +19,21 @@ export interface InboundPolicyConfig {
   blockedPatterns?: string[];
 }
 
+/**
+ * Encryption mode for Mahilo messages.
+ * - off: No encryption (plaintext only)
+ * - opportunistic: Encrypt when recipient supports it, fallback to plaintext
+ * - required: Always encrypt, fail if recipient doesn't support encryption
+ */
+export type EncryptionMode = "off" | "opportunistic" | "required";
+
+export interface EncryptionConfig {
+  /** Encryption mode for outbound messages. Default: off */
+  mode?: EncryptionMode;
+  /** Allow plaintext fallback when opportunistic encryption fails. Default: true */
+  allow_plaintext_fallback?: boolean;
+}
+
 export interface MahiloPluginConfig {
   mahilo_api_key?: string;
   mahilo_api_url?: string;
@@ -34,6 +49,8 @@ export interface MahiloPluginConfig {
   inbound_session_key?: string;
   /** Agent ID for inbound message routing. If not set, uses default agent. */
   inbound_agent_id?: string;
+  /** Encryption settings for Mahilo messages. */
+  encryption?: EncryptionConfig;
 }
 
 // =============================================================================
@@ -71,6 +88,10 @@ export interface RegisterAgentRequest {
   public_key?: string;
   public_key_alg?: string;
   routing_priority?: number;
+  /** Advertise encryption support to the registry */
+  supports_encryption?: boolean;
+  /** Preferred encryption algorithm */
+  encryption_alg?: string;
 }
 
 export interface RegisterAgentResponse {

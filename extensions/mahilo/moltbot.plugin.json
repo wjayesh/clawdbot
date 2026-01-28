@@ -74,6 +74,32 @@
             "items": { "type": "string" }
           }
         }
+      },
+      "inbound_session_key": {
+        "type": "string",
+        "default": "main",
+        "description": "Session key to route inbound Mahilo messages to"
+      },
+      "inbound_agent_id": {
+        "type": "string",
+        "description": "Agent ID for inbound message routing (if not set, uses default agent)"
+      },
+      "encryption": {
+        "type": "object",
+        "description": "Encryption settings for Mahilo messages (Phase 2 feature)",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["off", "opportunistic", "required"],
+            "default": "off",
+            "description": "Encryption mode: off (plaintext), opportunistic (encrypt if supported), required (always encrypt)"
+          },
+          "allow_plaintext_fallback": {
+            "type": "boolean",
+            "default": true,
+            "description": "Allow plaintext fallback when opportunistic encryption fails"
+          }
+        }
       }
     },
     "required": []

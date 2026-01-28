@@ -681,7 +681,7 @@
 
 #### 11.5 Encryption Config + Capability Negotiation
 - **ID**: `PLG-043`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
   - Add config options: encryption_mode (off/opportunistic/required), allow_plaintext_fallback.
@@ -930,7 +930,7 @@
 
 #### 16.1 Callback URL Auto-Detection
 - **ID**: `PLG-063`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
   - Detect public gateway URL (not localhost) when available.
@@ -941,7 +941,7 @@
 
 #### 16.2 Persist callback_secret
 - **ID**: `PLG-064`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
   - Store callback_secret in plugin state storage.
@@ -989,9 +989,9 @@
 | Priority | Total | Pending | Blocked | In Progress | Done |
 |----------|-------|---------|---------|-------------|------|
 | P0       | 6     | 0       | 6       | 0           | 0    |
-| P1       | 14    | 3       | 11      | 0           | 0    |
+| P1       | 14    | 0       | 11      | 0           | 3    |
 | P2       | 8     | 0       | 8       | 0           | 0    |
-| **Total**| 28    | 3       | 25      | 0           | 0    |
+| **Total**| 28    | 0       | 25      | 0           | 3    |
 
 ---
 
