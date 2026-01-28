@@ -43,13 +43,22 @@ The full message exchange loop is complete:
 | Priority | Total | Done | Pending | Blocked |
 |----------|-------|------|---------|---------|
 | P0       | 8     | 1    | 2       | 5       |
-| P1       | 16    | 5    | 2       | 9       |
-| P2       | 8     | 0    | 0       | 8       |
-| **Total**| 32    | 6    | 4       | 22      |
+| P1       | 16    | 5    | 11      | 0       |
+| P2       | 8     | 1    | 7       | 0       |
+| **Total**| 32    | 7    | 20      | 5       |
 
 **High Priority Pending (P0)**:
-- PLG-067: LLM Policy Evaluation Engine
-- PLG-068: LLM Policy Configuration
+- PLG-067: Fetch LLM Policies from Registry
+- PLG-068: LLM Policy Evaluation Engine
+
+**Pending (registry already supports)**:
+- Group messaging (PLG-046-051)
+- Policy sync (PLG-052-056)
+- Trusted routing (PLG-057-059)
+- Secret rotation (PLG-065-066)
+
+**Blocked (needs registry spec)**:
+- E2E encryption (PLG-039-045)
 
 ---
 
@@ -251,11 +260,19 @@ extensions/mahilo/
 
 ---
 
-## Next Steps
+## Next Steps (Priority Order)
 
-1. **LLM Policy Enforcement** (PLG-067, PLG-068) - P0 priority
+1. **LLM Policy Enforcement** (PLG-067, PLG-068) - P0
+   - Fetch LLM policies from registry
    - Implement semantic filtering for outbound/inbound messages
-   - Support configurable policy prompts
-2. Update `talk_to_group` to use registry's group messaging (registry supports it)
-3. E2E encryption (registry already supports the metadata - plugin can implement)
-4. Group messaging client updates when needed
+
+2. **Group Messaging** (PLG-046-051) - P1
+   - Registry already supports groups - just wire up the plugin client
+   - Update talk_to_group to use registry (currently returns 501)
+
+3. **Policy Sync** (PLG-052-056) - P1
+   - Registry already has policy CRUD - plugin needs to fetch and merge
+
+4. **E2E Encryption** (PLG-039-045) - P0 but BLOCKED
+   - Registry stores encryption metadata but spec not finalized
+   - Plugin can implement once spec is ready
