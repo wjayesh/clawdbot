@@ -832,7 +832,7 @@
 
 #### 13.3 LLM Policy Integration with Message Flow
 - **ID**: `PLG-069`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
   - Integrate into talk_to_agent and talk_to_group tools
@@ -841,14 +841,14 @@
   - Clear rejection messages that don't leak policy details
   - Evaluation order: sender global → per-recipient → group policies
 - **Acceptance Criteria**:
-  - [ ] Tools check LLM policies before sending
-  - [ ] Webhook checks LLM policies on inbound
-  - [ ] Rejection messages are helpful but not revealing
-  - [ ] Respects policy priority ordering
+  - [x] Tools check LLM policies before sending
+  - [x] Webhook checks LLM policies on inbound
+  - [x] Rejection messages are helpful but not revealing
+  - [x] Respects policy priority ordering
 
 #### 13.4 LLM Policy Tests
 - **ID**: `PLG-070`
-- **Status**: `pending`
+- **Status**: `done`
 - **Priority**: P1
 - **Notes**:
   - Unit tests with mocked LLM responses
@@ -856,9 +856,9 @@
   - Test evaluation ordering (global → user → group)
   - Test rejection message formatting
 - **Acceptance Criteria**:
-  - [ ] Policy fetch and cache tested
-  - [ ] Evaluation logic tested with mocks
-  - [ ] Integration with tools/webhook tested
+  - [x] Policy fetch and cache tested
+  - [x] Evaluation logic tested with mocks
+  - [x] Integration with tools/webhook tested
 
 ---
 
@@ -1073,9 +1073,9 @@
 | Priority | Total | Pending | Blocked | In Progress | Done |
 |----------|-------|---------|---------|-------------|------|
 | P0       | 8     | 0       | 5       | 0           | 3    |
-| P1       | 16    | 11      | 0       | 0           | 5    |
+| P1       | 16    | 9       | 0       | 0           | 7    |
 | P2       | 8     | 7       | 0       | 0           | 1    |
-| **Total**| 32    | 18      | 5       | 0           | 9    |
+| **Total**| 32    | 16      | 5       | 0           | 11   |
 
 **High Priority (P0 Pending)**:
 - All P0 tasks complete (except blocked encryption tasks)

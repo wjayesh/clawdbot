@@ -10,6 +10,7 @@ import type { MoltbotPluginApi } from "clawdbot/plugin-sdk";
 import { getMahiloClient } from "../client/mahilo-api.js";
 import { resolveConfig } from "../config.js";
 import { applyLocalPolicies } from "../policy/local-filter.js";
+import { evaluatePolicies, type LlmPolicyEvaluatorConfig } from "../policy/llm-evaluator.js";
 import { ErrorCodes, MahiloError } from "../types.js";
 
 export function createTalkToGroupTool(api: MoltbotPluginApi) {
@@ -74,7 +75,41 @@ Parameters:
         return formatResult(`Message blocked by local policy: ${policyResult.reason}`);
       }
 
-      // 4. Send message
+      // 4. Apply LLM policy filters (if enabled)
+      if (config.llm_policies?.enabled) {
+        try {
+          // Fetch applicable policies for this group (outbound + global + group-specific)
+          const policies = await mahiloClient.getApplicablePolicies({
+            direction: "outbound",
+            targetGroup: groupId,
+          });
+
+          if (policies.length > 0) {
+            const evalConfig: LlmPolicyEvaluatorConfig = {
+              provider: config.llm_policies.provider,
+              model: config.llm_policies.model,
+              timeoutMs: config.llm_policies.timeout_ms ?? 15_000,
+            };
+
+            const llmResult = await evaluatePolicies(policies, message, context, evalConfig);
+            if (!llmResult.allowed) {
+              // Return clear message that doesn't leak policy details
+              return formatResult(
+                `Message blocked by content policy${llmResult.blocking_policy_name ? ` (${llmResult.blocking_policy_name})` : ""}. ` +
+                  `Please review your message and try again.`,
+              );
+            }
+          }
+        } catch (err) {
+          // Log but don't block on LLM policy errors (fail-open at integration level)
+          console.warn(
+            "[Mahilo] LLM policy evaluation failed:",
+            err instanceof Error ? err.message : "Unknown error",
+          );
+        }
+      }
+
+      // 5. Send message
       try {
         const response = await mahiloClient.sendMessage({
           recipient: groupId,

@@ -19,7 +19,19 @@ vi.mock("../src/webhook/trigger-agent.js", () => ({
   triggerAgentRun: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Mock the Mahilo client module
+vi.mock("../src/client/mahilo-api.js", () => ({
+  getMahiloClient: vi.fn(),
+}));
+
+// Mock the LLM evaluator module
+vi.mock("../src/policy/llm-evaluator.js", () => ({
+  evaluatePolicies: vi.fn(),
+}));
+
 import { triggerAgentRun } from "../src/webhook/trigger-agent.js";
+import { getMahiloClient } from "../src/client/mahilo-api.js";
+import { evaluatePolicies } from "../src/policy/llm-evaluator.js";
 
 // Create mock request with body - must be async iterable for handler
 function createMockRequest(
@@ -469,6 +481,266 @@ describe("Webhook Handler", () => {
 
       expect(res.getStatus()).toBe(200);
       expect(res.getBody()).toEqual({ acknowledged: true });
+    });
+  });
+
+  // ========================================================================
+  // LLM Policy Tests
+  // ========================================================================
+
+  describe("LLM policy enforcement", () => {
+    it("should call LLM policy evaluation when enabled", async () => {
+      const mockClient = {
+        getApplicablePolicies: vi.fn().mockResolvedValue([
+          {
+            id: "policy_1",
+            name: "Inbound Filter",
+            policy_content: "Block harmful content",
+            scope: "global",
+            direction: "inbound",
+            priority: 100,
+            enabled: true,
+          },
+        ]),
+      };
+      (getMahiloClient as any).mockReturnValue(mockClient);
+      (evaluatePolicies as any).mockResolvedValue({ allowed: true });
+
+      const handlerWithLlm = createWebhookHandler({
+        pluginConfig: {
+          mahilo_api_key: "test-key",
+          llm_policies: {
+            enabled: true,
+          },
+        },
+        logger: mockLogger,
+        callbackSecret: secret,
+      });
+
+      const body = {
+        message_id: "msg_llm_1",
+        sender: "alice",
+        sender_agent: "alice-agent",
+        message: "Hello!",
+        timestamp: new Date().toISOString(),
+      };
+      const bodyStr = JSON.stringify(body);
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const signature = `sha256=${computeSignature(bodyStr, timestamp, secret)}`;
+
+      const req = createMockRequest(bodyStr, {
+        "x-mahilo-signature": signature,
+        "x-mahilo-timestamp": timestamp,
+      });
+      const res = createMockResponse();
+
+      await handlerWithLlm(req, res);
+
+      expect(mockClient.getApplicablePolicies).toHaveBeenCalledWith({
+        direction: "inbound",
+        targetUser: "alice",
+      });
+      expect(evaluatePolicies).toHaveBeenCalled();
+      expect(res.getStatus()).toBe(200);
+      expect(res.getBody()).toEqual({ acknowledged: true });
+    });
+
+    it("should block message when LLM policy rejects", async () => {
+      const mockClient = {
+        getApplicablePolicies: vi.fn().mockResolvedValue([
+          {
+            id: "policy_1",
+            name: "No Spam",
+            policy_content: "Block spam",
+            scope: "global",
+            direction: "inbound",
+            priority: 100,
+            enabled: true,
+          },
+        ]),
+      };
+      (getMahiloClient as any).mockReturnValue(mockClient);
+      (evaluatePolicies as any).mockResolvedValue({
+        allowed: false,
+        reason: "Message looks like spam",
+        blocking_policy_name: "No Spam",
+      });
+
+      const handlerWithLlm = createWebhookHandler({
+        pluginConfig: {
+          mahilo_api_key: "test-key",
+          llm_policies: {
+            enabled: true,
+          },
+        },
+        logger: mockLogger,
+        callbackSecret: secret,
+      });
+
+      const body = {
+        message_id: "msg_llm_2",
+        sender: "spammer",
+        sender_agent: "spam-agent",
+        message: "BUY NOW!!! CLICK HERE!!!",
+        timestamp: new Date().toISOString(),
+      };
+      const bodyStr = JSON.stringify(body);
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const signature = `sha256=${computeSignature(bodyStr, timestamp, secret)}`;
+
+      const req = createMockRequest(bodyStr, {
+        "x-mahilo-signature": signature,
+        "x-mahilo-timestamp": timestamp,
+      });
+      const res = createMockResponse();
+
+      await handlerWithLlm(req, res);
+
+      expect(res.getStatus()).toBe(200);
+      expect(res.getBody()).toEqual({
+        acknowledged: true,
+        processed: false,
+        reason: "Message blocked by content policy",
+      });
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.stringContaining("blocked by LLM policy"),
+      );
+    });
+
+    it("should skip LLM evaluation when disabled", async () => {
+      const mockClient = {
+        getApplicablePolicies: vi.fn(),
+      };
+      (getMahiloClient as any).mockReturnValue(mockClient);
+
+      const handlerNoLlm = createWebhookHandler({
+        pluginConfig: {
+          mahilo_api_key: "test-key",
+          llm_policies: {
+            enabled: false,
+          },
+        },
+        logger: mockLogger,
+        callbackSecret: secret,
+      });
+
+      const body = {
+        message_id: "msg_llm_3",
+        sender: "alice",
+        sender_agent: "alice-agent",
+        message: "Hello!",
+        timestamp: new Date().toISOString(),
+      };
+      const bodyStr = JSON.stringify(body);
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const signature = `sha256=${computeSignature(bodyStr, timestamp, secret)}`;
+
+      const req = createMockRequest(bodyStr, {
+        "x-mahilo-signature": signature,
+        "x-mahilo-timestamp": timestamp,
+      });
+      const res = createMockResponse();
+
+      await handlerNoLlm(req, res);
+
+      expect(mockClient.getApplicablePolicies).not.toHaveBeenCalled();
+      expect(evaluatePolicies).not.toHaveBeenCalled();
+      expect(res.getStatus()).toBe(200);
+    });
+
+    it("should skip LLM evaluation when no API key configured", async () => {
+      const mockClient = {
+        getApplicablePolicies: vi.fn(),
+      };
+      (getMahiloClient as any).mockReturnValue(mockClient);
+
+      const handlerNoKey = createWebhookHandler({
+        pluginConfig: {
+          // No mahilo_api_key
+          llm_policies: {
+            enabled: true,
+          },
+        },
+        logger: mockLogger,
+        callbackSecret: secret,
+      });
+
+      const body = {
+        message_id: "msg_llm_4",
+        sender: "alice",
+        sender_agent: "alice-agent",
+        message: "Hello!",
+        timestamp: new Date().toISOString(),
+      };
+      const bodyStr = JSON.stringify(body);
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const signature = `sha256=${computeSignature(bodyStr, timestamp, secret)}`;
+
+      const req = createMockRequest(bodyStr, {
+        "x-mahilo-signature": signature,
+        "x-mahilo-timestamp": timestamp,
+      });
+      const res = createMockResponse();
+
+      await handlerNoKey(req, res);
+
+      expect(mockClient.getApplicablePolicies).not.toHaveBeenCalled();
+      expect(res.getStatus()).toBe(200);
+    });
+
+    it("should continue on LLM evaluation error (fail-open)", async () => {
+      const mockClient = {
+        getApplicablePolicies: vi.fn().mockResolvedValue([
+          {
+            id: "policy_1",
+            name: "Test",
+            policy_content: "Test",
+            scope: "global",
+            direction: "inbound",
+            priority: 100,
+            enabled: true,
+          },
+        ]),
+      };
+      (getMahiloClient as any).mockReturnValue(mockClient);
+      (evaluatePolicies as any).mockRejectedValue(new Error("LLM service unavailable"));
+
+      const handlerWithLlm = createWebhookHandler({
+        pluginConfig: {
+          mahilo_api_key: "test-key",
+          llm_policies: {
+            enabled: true,
+          },
+        },
+        logger: mockLogger,
+        callbackSecret: secret,
+      });
+
+      const body = {
+        message_id: "msg_llm_5",
+        sender: "alice",
+        sender_agent: "alice-agent",
+        message: "Hello!",
+        timestamp: new Date().toISOString(),
+      };
+      const bodyStr = JSON.stringify(body);
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const signature = `sha256=${computeSignature(bodyStr, timestamp, secret)}`;
+
+      const req = createMockRequest(bodyStr, {
+        "x-mahilo-signature": signature,
+        "x-mahilo-timestamp": timestamp,
+      });
+      const res = createMockResponse();
+
+      await handlerWithLlm(req, res);
+
+      // Should still process the message despite LLM error
+      expect(res.getStatus()).toBe(200);
+      expect(res.getBody()).toEqual({ acknowledged: true });
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("LLM policy evaluation failed"),
+      );
     });
   });
 

@@ -8,7 +8,7 @@ Last Updated: 2026-01-28
 ## Current Status
 
 **Phase 1**: 38/38 tasks complete (100%) ✅
-**Phase 2**: 9/32 tasks complete (28%) - 18 pending, 5 blocked on registry encryption spec
+**Phase 2**: 11/32 tasks complete (34%) - 16 pending, 5 blocked on registry encryption spec
 
 ## What Works Today
 
@@ -43,15 +43,14 @@ The full message exchange loop is complete:
 | Priority | Total | Done | Pending | Blocked |
 |----------|-------|------|---------|---------|
 | P0       | 8     | 3    | 0       | 5       |
-| P1       | 16    | 5    | 11      | 0       |
+| P1       | 16    | 7    | 9       | 0       |
 | P2       | 8     | 1    | 7       | 0       |
-| **Total**| 32    | 9    | 18      | 5       |
+| **Total**| 32    | 11   | 16      | 5       |
 
 **High Priority Pending (P0)**:
 - All P0 tasks complete (except blocked encryption tasks)
 
 **Pending (registry already supports these)**:
-- LLM policies (PLG-067-070) - registry stores, plugin evaluates locally
 - Group messaging (PLG-046-051) - registry has full group support
 - Policy sync (PLG-052-056) - registry has policy CRUD
 - Trusted routing (PLG-057-059) - registry does routing by default
@@ -279,20 +278,35 @@ extensions/mahilo/
 - Updated config types with `llm_policies` settings (enabled, provider, model, timeout)
 - All 226 mahilo tests pass
 
+### Session 11 (2026-01-28)
+- Implemented PLG-069: LLM Policy Integration with Message Flow
+  - Integrated LLM policy evaluation into `talk_to_agent` tool
+  - Integrated LLM policy evaluation into `talk_to_group` tool
+  - Integrated LLM policy evaluation into webhook handler for inbound messages
+  - LLM policies run after static policies (cheaper filtering first)
+  - Clear rejection messages that don't leak policy details
+  - Fail-open behavior at integration level (individual policies can fail-closed)
+- Implemented PLG-070: LLM Policy Tests
+  - Added 8 tests for LLM policy integration in tools (talk_to_agent, talk_to_group)
+  - Added 5 tests for LLM policy integration in webhook handler
+  - Tests cover: policy evaluation, blocking, disabled state, error handling
+- All 239 mahilo tests pass
+
 ---
 
 ## Next Steps (Priority Order)
 
-1. **LLM Policy Integration** (PLG-069, PLG-070) - P1
-   - ✅ PLG-067, PLG-068 done - policies can be fetched and evaluated
-   - Next: Integrate into talk_to_agent/talk_to_group tools and webhook handler
-
-2. **Group Messaging** (PLG-046-051) - P1
+1. **Group Messaging** (PLG-046-051) - P1
    - Registry already supports groups - just wire up the plugin client
    - Update talk_to_group to use registry (currently returns 501)
+   - Add list groups support to list_mahilo_contacts
 
-3. **Policy Sync** (PLG-052-056) - P1
+2. **Policy Sync** (PLG-052-056) - P1
    - Registry already has policy CRUD - plugin needs to fetch and merge
+   - Merge local policies with registry policies
+
+3. **Trusted Routing** (PLG-057-059) - P2
+   - Registry does routing by default - add config controls
 
 4. **E2E Encryption** (PLG-039-045) - P0 but BLOCKED
    - Registry stores encryption metadata but spec not finalized
