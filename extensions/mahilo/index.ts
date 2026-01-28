@@ -29,6 +29,11 @@ import {
 import type { MahiloPluginConfig } from "./src/types.js";
 import { getOrCreateMahiloKeypair } from "./src/keys.js";
 
+// Module-level state for service to access
+let pluginRuntime: MoltbotPluginApi["runtime"] | null = null;
+let pluginConfig: MahiloPluginConfig | null = null;
+let pluginLogger: MoltbotPluginApi["logger"] | null = null;
+
 const plugin = {
   id: "mahilo",
   name: "Mahilo",
@@ -37,6 +42,11 @@ const plugin = {
   register(api: MoltbotPluginApi) {
     const config = resolveConfig(api.pluginConfig);
     const logger = api.logger;
+
+    // Store for service access
+    pluginRuntime = api.runtime;
+    pluginConfig = config;
+    pluginLogger = logger;
 
     // Validate configuration
     const validation = validateConfig(config);
@@ -65,28 +75,26 @@ const plugin = {
     // Start dedup cleanup
     startCleanup();
 
-    // Register agent with Mahilo on gateway start (if auto_register is enabled)
-    api.on("gateway_start", async (event) => {
-      if (!config.auto_register) {
-        logger.info("[Mahilo] Auto-registration disabled");
-        return;
-      }
+    // Register auto-registration service (runs after HTTP server is listening)
+    if (config.auto_register) {
+      api.registerService({
+        id: "mahilo-auto-register",
+        start: async (ctx) => {
+          if (!pluginConfig?.mahilo_api_key) {
+            pluginLogger?.warn("[Mahilo] Cannot auto-register: mahilo_api_key not configured");
+            return;
+          }
 
-      if (!config.mahilo_api_key) {
-        logger.warn(
-          "[Mahilo] Cannot auto-register: mahilo_api_key not configured",
-        );
-        return;
-      }
-
-      await registerAgent(config, event.port, logger, api.runtime);
-    });
-
-    // Cleanup on gateway stop
-    api.on("gateway_stop", () => {
-      stopCleanup();
-      logger.info("[Mahilo] Plugin cleanup complete");
-    });
+          // Determine port from config or callback_url_override
+          const port = ctx.config?.gateway?.port ?? 18789;
+          await registerAgent(pluginConfig, port, pluginLogger!, pluginRuntime!);
+        },
+        stop: () => {
+          stopCleanup();
+          pluginLogger?.info("[Mahilo] Plugin cleanup complete");
+        },
+      });
+    }
   },
 };
 
