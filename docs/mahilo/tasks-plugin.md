@@ -721,25 +721,29 @@
 
 ### 12. Group Messaging (Registry Phase 2)
 
+> **Note**: Registry already fully supports groups (`recipient_type: "group"`, fan-out delivery).
+> Plugin just needs to wire up the client and tools.
+
 #### 12.1 Mahilo Client: Group Endpoints
 - **ID**: `PLG-046`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P1
 - **Notes**:
-  - Add client methods for listGroups, group membership, and sendGroupMessage.
-  - Normalize group-related error codes.
+  - Registry already supports: `GET /api/v1/groups`, `POST /api/v1/messages/send` with `recipient_type: "group"`
+  - Add client methods for listGroups, group membership, and sendGroupMessage
+  - Normalize group-related error codes
 - **Acceptance Criteria**:
   - [ ] Client exposes group methods
   - [ ] Group errors mapped to typed results
 
 #### 12.2 talk_to_group: Real Group Support
 - **ID**: `PLG-047`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P1
 - **Notes**:
-  - Use group ids (not names) per registry guidance.
-  - Validate membership before sending when possible.
-  - Apply local + registry policies to group payloads.
+  - Use group ids (not names) per registry guidance
+  - The existing talk_to_group tool returns 501 - update to use registry
+  - Apply local + registry policies to group payloads
 - **Acceptance Criteria**:
   - [ ] Group messages send via registry
   - [ ] Membership errors handled clearly
@@ -747,44 +751,44 @@
 
 #### 12.3 Webhook: Group Payload Handling
 - **ID**: `PLG-048`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P1
 - **Notes**:
-  - Parse group_id/group_name metadata in inbound payloads.
-  - Format agent message with group context.
+  - Parse group_id/group_name metadata in inbound payloads
+  - Format agent message with group context
 - **Acceptance Criteria**:
   - [ ] Group fields parsed and validated
   - [ ] Formatted message includes group context
 
 #### 12.4 list_mahilo_contacts: Include Groups
 - **ID**: `PLG-049`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P2
 - **Notes**:
-  - Add option to include groups alongside friends.
-  - Keep output readable (separate users vs groups).
+  - Add option to include groups alongside friends
+  - Keep output readable (separate users vs groups)
 - **Acceptance Criteria**:
   - [ ] Groups listed with ids + names
   - [ ] Output remains readable
 
 #### 12.5 Group Messaging Tests
 - **ID**: `PLG-050`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P1
 - **Notes**:
-  - Tests for talk_to_group success + error cases.
-  - Webhook tests for inbound group message formatting.
+  - Tests for talk_to_group success + error cases
+  - Webhook tests for inbound group message formatting
 - **Acceptance Criteria**:
   - [ ] Tool tests cover group flows
   - [ ] Webhook tests cover group payloads
 
 #### 12.6 Group Messaging Docs
 - **ID**: `PLG-051`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P2
 - **Notes**:
-  - Document group setup, ids, and limitations.
-  - Update examples and troubleshooting.
+  - Document group setup, ids, and limitations
+  - Update examples and troubleshooting
 - **Acceptance Criteria**:
   - [ ] Docs include group setup + usage
   - [ ] Limitations documented
@@ -860,103 +864,114 @@
 
 ### 14. Registry Policy Sync
 
+> **Note**: Registry already has full policy CRUD (`GET/POST/PATCH/DELETE /api/v1/policies`).
+> Plugin just needs to fetch and merge with local policies.
+
 #### 14.1 Mahilo Client: Policies API
 - **ID**: `PLG-052`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P1
 - **Notes**:
-  - Implement policy fetch endpoints (global, per-user, per-group).
-  - Add caching with TTL and safe fallback behavior.
+  - Registry already supports: `GET /api/v1/policies?scope=global|user|group`
+  - Add client methods to fetch heuristic + LLM policies
+  - Add caching with TTL (5 min) and safe fallback
 - **Acceptance Criteria**:
   - [ ] Policies fetched + cached
   - [ ] Client errors handled gracefully
 
-#### 13.2 Policy Merge + Precedence
+#### 14.2 Policy Merge + Precedence
 - **ID**: `PLG-053`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P1
 - **Notes**:
-  - Merge local policies with registry policies.
-  - Define precedence and conflict rules.
-  - Ensure inbound/outbound paths use merged policies.
+  - Merge local policies with registry policies
+  - Precedence: local policies first, then registry policies
+  - For heuristic: merge rules (e.g., take stricter maxLength)
+  - For LLM: evaluate all in priority order
 - **Acceptance Criteria**:
   - [ ] Merge rules defined and documented
   - [ ] Inbound/outbound enforcement uses merged policies
 
-#### 13.3 Policy Config Controls
+#### 14.3 Policy Config Controls
 - **ID**: `PLG-054`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P1
 - **Notes**:
-  - Add config options: local-only, registry-only, merged.
-  - Support per-user overrides if registry exposes them.
+  - Add config option: `policy_source: "local" | "registry" | "merged"`
+  - Default to "merged" for full functionality
 - **Acceptance Criteria**:
   - [ ] Config schema updated
   - [ ] Behavior matches selected mode
 
-#### 13.4 Policy Sync Tests
+#### 14.4 Policy Sync Tests
 - **ID**: `PLG-055`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P1
 - **Notes**:
-  - Tests for caching, TTL, and precedence rules.
-  - Tests for missing or invalid policy data.
+  - Tests for caching, TTL, and precedence rules
+  - Tests for registry unavailable (fallback to local)
 - **Acceptance Criteria**:
   - [ ] Policy cache and merge tested
   - [ ] Error cases covered
 
-#### 13.5 Policy Sync Docs
+#### 14.5 Policy Sync Docs
 - **ID**: `PLG-056`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P2
 - **Notes**:
-  - Document policy sources and precedence.
-  - Provide example configs.
+  - Document policy sources and precedence
+  - Provide example configs
 - **Acceptance Criteria**:
   - [ ] Docs cover policy sync options
   - [ ] Example configs included
 
 ---
 
-### 14. Trusted Routing (Optional)
+### 15. Trusted Routing (Optional)
 
-#### 14.1 Trusted Routing Config + Guardrails
+> **Note**: Registry already does routing by default when `recipient_connection_id` is not provided.
+> It picks the highest-priority connection and supports `routing_hints` (labels, tags).
+> This section is about adding explicit config controls in the plugin.
+
+#### 15.1 Trusted Routing Config + Guardrails
 - **ID**: `PLG-057`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P2
 - **Notes**:
-  - Add config flag for trusted routing.
-  - Block trusted routing when encryption is required.
-  - Log privacy warnings when enabled.
+  - Currently plugin always fetches connections and picks locally
+  - Add config to let registry do the routing (simpler, but registry sees routing decision)
+  - Block trusted routing when encryption is required (E2E needs sender to know recipient key)
+  - Log privacy warnings when enabled
 - **Acceptance Criteria**:
   - [ ] Config flag present with warnings
   - [ ] Guardrails enforced when encryption required
 
-#### 14.2 Registry-Selected Connection Flow
+#### 15.2 Registry-Selected Connection Flow
 - **ID**: `PLG-058`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P2
 - **Notes**:
-  - Allow sendMessage without recipient_connection_id when trusted routing enabled.
-  - Pass routing_hints and any plaintext required by registry.
+  - When enabled, skip local connection fetch
+  - Just pass recipient username + routing_hints to registry
+  - Registry picks best connection based on priority/hints
 - **Acceptance Criteria**:
   - [ ] Registry can select connection when enabled
   - [ ] Sender-side routing remains default when disabled
 
-#### 14.3 Trusted Routing Tests + Docs
+#### 15.3 Trusted Routing Tests + Docs
 - **ID**: `PLG-059`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P2
 - **Notes**:
-  - Tests for trusted routing toggle + fallback.
-  - Docs explaining privacy trade-offs.
+  - Tests for trusted routing toggle + fallback
+  - Docs explaining privacy trade-offs
 - **Acceptance Criteria**:
   - [ ] Tests cover trusted routing on/off
   - [ ] Docs updated with privacy guidance
 
 ---
 
-### 15. Agent Runner Integration
+### 16. Agent Runner Integration
 
 #### 15.1 SDK Agent Runner Hook
 - **ID**: `PLG-060`
@@ -994,9 +1009,9 @@
 
 ---
 
-### 16. Operational Hardening
+### 17. Operational Hardening
 
-#### 16.1 Callback URL Auto-Detection
+#### 17.1 Callback URL Auto-Detection
 - **ID**: `PLG-063`
 - **Status**: `done`
 - **Priority**: P1
@@ -1004,10 +1019,10 @@
   - Detect public gateway URL (not localhost) when available.
   - Validate scheme/host and warn on unsafe values.
 - **Acceptance Criteria**:
-  - [ ] Auto-detection uses gateway/runtime config
-  - [ ] Validation + warnings in logs
+  - [x] Auto-detection uses gateway/runtime config
+  - [x] Validation + warnings in logs
 
-#### 16.2 Persist callback_secret
+#### 17.2 Persist callback_secret
 - **ID**: `PLG-064`
 - **Status**: `done`
 - **Priority**: P1
@@ -1015,26 +1030,27 @@
   - Store callback_secret in plugin state storage.
   - Reuse on startup to avoid re-register unless missing.
 - **Acceptance Criteria**:
-  - [ ] callback_secret persisted and loaded
-  - [ ] Re-register only when missing or invalid
+  - [x] callback_secret persisted and loaded
+  - [x] Re-register only when missing or invalid
 
-#### 16.3 Callback Secret Rotation + Recovery
+#### 17.3 Callback Secret Rotation + Recovery
 - **ID**: `PLG-065`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P2
 - **Notes**:
-  - Implement manual rotation (CLI or config flag).
-  - Handle registry rotate endpoint or fallback to re-register.
+  - Registry already supports: `POST /api/v1/agents` with `rotate_secret: true`
+  - Add CLI command or config flag to trigger rotation
+  - Update local state with new secret
 - **Acceptance Criteria**:
   - [ ] Rotation updates registry + local state
   - [ ] Recovery path documented
 
-#### 16.4 Callback Secret Tests
+#### 17.4 Callback Secret Tests
 - **ID**: `PLG-066`
-- **Status**: `blocked`
+- **Status**: `pending`
 - **Priority**: P2
 - **Notes**:
-  - Tests for persistence, reload, and rotation.
+  - Tests for persistence, reload, and rotation
 - **Acceptance Criteria**:
   - [ ] Persistence tests cover restart scenarios
   - [ ] Rotation tests cover re-register fallback
@@ -1057,13 +1073,22 @@
 | Priority | Total | Pending | Blocked | In Progress | Done |
 |----------|-------|---------|---------|-------------|------|
 | P0       | 8     | 2       | 5       | 0           | 1    |
-| P1       | 16    | 2       | 9       | 0           | 5    |
-| P2       | 8     | 0       | 8       | 0           | 0    |
-| **Total**| 32    | 4       | 22      | 0           | 6    |
+| P1       | 16    | 11      | 0       | 0           | 5    |
+| P2       | 8     | 7       | 0       | 0           | 1    |
+| **Total**| 32    | 20      | 5       | 0           | 7    |
 
 **High Priority (P0 Pending)**:
-- PLG-067: LLM Policy Evaluation Engine
-- PLG-068: LLM Policy Configuration
+- PLG-067: Fetch LLM Policies from Registry
+- PLG-068: LLM Policy Evaluation Engine
+
+**Pending (registry already supports these)**:
+- PLG-046-051: Group Messaging (registry has groups)
+- PLG-052-056: Registry Policy Sync (registry has CRUD)
+- PLG-057-059: Trusted Routing (registry does routing by default)
+- PLG-065-066: Callback Secret Rotation (registry has `rotate_secret`)
+
+**Blocked (waiting on registry features)**:
+- PLG-039-042, PLG-044-045: E2E Encryption (needs encryption spec)
 
 ---
 
@@ -1101,12 +1126,13 @@ Phase 1:
 - PLG-034 (E2E Test) depends on a running registry
 
 Phase 2:
-- PLG-039 to PLG-045 depend on registry encryption spec + key lookup endpoints
-- PLG-046 to PLG-051 depend on registry group endpoints + group message payloads
-- PLG-052 to PLG-056 depend on registry policy endpoints
-- PLG-057 to PLG-059 depend on trusted routing support in the registry
-- PLG-060 to PLG-062: DONE - uses callGateway({ method: "agent" }) instead of SDK API
-- PLG-065 to PLG-066 depend on callback secret rotation support (or a re-register fallback)
+- PLG-039 to PLG-045: E2E encryption - **BLOCKED** waiting on registry encryption spec
+- PLG-046 to PLG-051: Group messaging - **PENDING** (registry already supports groups!)
+- PLG-052 to PLG-056: Policy sync - **PENDING** (registry already has policy CRUD!)
+- PLG-057 to PLG-059: Trusted routing - **PENDING** (registry already does routing by default!)
+- PLG-060 to PLG-062: Agent runner - **DONE** (uses callGateway)
+- PLG-065 to PLG-066: Secret rotation - **PENDING** (registry supports `rotate_secret: true`!)
+- PLG-067 to PLG-070: LLM policies - **PENDING** (registry has LLM policy storage, plugin needs evaluation)
 
 ---
 
