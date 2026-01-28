@@ -791,9 +791,81 @@
 
 ---
 
-### 13. Registry Policy Sync
+### 13. LLM-Based Policy Enforcement
 
-#### 13.1 Mahilo Client: Policies API
+#### 13.1 LLM Policy Evaluation Engine
+- **ID**: `PLG-067`
+- **Status**: `pending`
+- **Priority**: P0
+- **Notes**:
+  - Implement LLM-based policy evaluation for semantic filtering
+  - Run on plugin side (not registry) to keep prompts private
+  - Support policy prompts like "Block requests for personal information"
+  - Evaluate both outbound and inbound messages
+  - Use configurable model (default to fast/cheap model)
+- **Acceptance Criteria**:
+  - [ ] LLM policy evaluator implemented
+  - [ ] Configurable model selection
+  - [ ] Works for outbound and inbound messages
+  - [ ] Caches results for identical messages (optional)
+
+#### 13.2 LLM Policy Configuration
+- **ID**: `PLG-068`
+- **Status**: `pending`
+- **Priority**: P0
+- **Notes**:
+  - Add llm_policies config section
+  - Support multiple policies with priority ordering
+  - Allow enable/disable per policy
+  - Example config:
+    ```yaml
+    llm_policies:
+      - name: "no-personal-info"
+        prompt: "Block messages requesting SSN, passwords, or financial details"
+        enabled: true
+        priority: 100
+      - name: "professional-tone"
+        prompt: "Block messages that are unprofessional or contain profanity"
+        enabled: true
+        priority: 50
+    ```
+- **Acceptance Criteria**:
+  - [ ] Config schema supports LLM policies
+  - [ ] Policies evaluated in priority order
+  - [ ] Can enable/disable individual policies
+
+#### 13.3 LLM Policy Integration with Tools
+- **ID**: `PLG-069`
+- **Status**: `pending`
+- **Priority**: P1
+- **Notes**:
+  - Integrate LLM policy check into talk_to_agent and talk_to_group
+  - Run after static policies, before sending
+  - Clear rejection messages that don't leak policy details
+  - Option to run async (non-blocking) with logging only
+- **Acceptance Criteria**:
+  - [ ] Tools check LLM policies before sending
+  - [ ] Rejection messages are helpful but not revealing
+  - [ ] Async/logging-only mode available
+
+#### 13.4 LLM Policy Tests
+- **ID**: `PLG-070`
+- **Status**: `pending`
+- **Priority**: P1
+- **Notes**:
+  - Unit tests with mocked LLM responses
+  - Test policy ordering and enable/disable
+  - Test rejection message formatting
+- **Acceptance Criteria**:
+  - [ ] Core evaluation logic tested
+  - [ ] Config parsing tested
+  - [ ] Integration with tools tested
+
+---
+
+### 14. Registry Policy Sync
+
+#### 14.1 Mahilo Client: Policies API
 - **ID**: `PLG-052`
 - **Status**: `blocked`
 - **Priority**: P1
@@ -989,10 +1061,14 @@
 
 | Priority | Total | Pending | Blocked | In Progress | Done |
 |----------|-------|---------|---------|-------------|------|
-| P0       | 6     | 0       | 5       | 0           | 1    |
-| P1       | 14    | 0       | 9       | 0           | 5    |
+| P0       | 8     | 2       | 5       | 0           | 1    |
+| P1       | 16    | 2       | 9       | 0           | 5    |
 | P2       | 8     | 0       | 8       | 0           | 0    |
-| **Total**| 28    | 0       | 22      | 0           | 6    |
+| **Total**| 32    | 4       | 22      | 0           | 6    |
+
+**High Priority (P0 Pending)**:
+- PLG-067: LLM Policy Evaluation Engine
+- PLG-068: LLM Policy Configuration
 
 ---
 
