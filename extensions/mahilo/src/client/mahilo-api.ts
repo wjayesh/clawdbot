@@ -6,6 +6,8 @@ import type {
   AgentConnection,
   Friend,
   GetPoliciesResponse,
+  Group,
+  GroupMember,
   LlmPolicy,
   MahiloPluginConfig,
   RegisterAgentRequest,
@@ -176,6 +178,32 @@ export class MahiloClient {
     return this.request<{ friendship_id: string; status: string }>("POST", "/friends/request", {
       username,
     });
+  }
+
+  // =========================================================================
+  // Group Methods
+  // =========================================================================
+
+  /**
+   * Get all groups the authenticated user is a member of.
+   */
+  async getGroups(): Promise<Group[]> {
+    return this.request<Group[]>("GET", "/groups");
+  }
+
+  /**
+   * Get details of a specific group.
+   */
+  async getGroup(groupId: string): Promise<Group> {
+    return this.request<Group>("GET", `/groups/${groupId}`);
+  }
+
+  /**
+   * Get members of a specific group.
+   * Requires membership in the group.
+   */
+  async getGroupMembers(groupId: string): Promise<GroupMember[]> {
+    return this.request<GroupMember[]>("GET", `/groups/${groupId}/members`);
   }
 
   // =========================================================================

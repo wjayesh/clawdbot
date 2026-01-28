@@ -116,6 +116,96 @@ describe("trigger-agent", () => {
 
       expect(formatted).toContain("Alice 👩‍💻");
     });
+
+    // ========================================================================
+    // Group Message Formatting Tests
+    // ========================================================================
+
+    it("should format group message with group_id", () => {
+      const incoming = createMockIncomingMessage({
+        sender: "bob",
+        message: "Hello team!",
+        group_id: "grp_123",
+      });
+
+      const formatted = formatIncomingMessage(incoming);
+
+      expect(formatted).toContain('in group "grp_123"');
+      expect(formatted).toContain("Hello team!");
+      expect(formatted).toContain('talk_to_group tool with group_id "grp_123"');
+      expect(formatted).toContain('talk_to_agent tool with recipient "bob"');
+    });
+
+    it("should format group message with group_name", () => {
+      const incoming = createMockIncomingMessage({
+        sender: "alice",
+        message: "Meeting at 3pm",
+        group_id: "grp_456",
+        group_name: "Team Alpha",
+      });
+
+      const formatted = formatIncomingMessage(incoming);
+
+      expect(formatted).toContain('in group "Team Alpha"');
+      expect(formatted).toContain('talk_to_group tool with group_id "grp_456"');
+    });
+
+    it("should prefer group_name over group_id for display", () => {
+      const incoming = createMockIncomingMessage({
+        sender: "charlie",
+        message: "Ping!",
+        group_id: "grp_789",
+        group_name: "Project Beta",
+      });
+
+      const formatted = formatIncomingMessage(incoming);
+
+      // Should use group_name for display
+      expect(formatted).toContain('in group "Project Beta"');
+      // But still use group_id for the tool reference
+      expect(formatted).toContain('group_id "grp_789"');
+    });
+
+    it("should include both group and direct reply options", () => {
+      const incoming = createMockIncomingMessage({
+        sender: "dave",
+        message: "Question",
+        group_id: "grp_100",
+      });
+
+      const formatted = formatIncomingMessage(incoming);
+
+      // Should have both reply options
+      expect(formatted).toContain("To reply to the group");
+      expect(formatted).toContain("To reply directly to dave");
+    });
+
+    it("should not include group instructions for non-group messages", () => {
+      const incoming = createMockIncomingMessage({
+        sender: "eve",
+        message: "Direct message",
+      });
+
+      const formatted = formatIncomingMessage(incoming);
+
+      expect(formatted).not.toContain("talk_to_group");
+      expect(formatted).not.toContain("To reply to the group");
+    });
+
+    it("should handle group message with context", () => {
+      const incoming = createMockIncomingMessage({
+        sender: "frank",
+        message: "Update on task",
+        context: "Weekly sync",
+        group_id: "grp_weekly",
+        group_name: "Weekly Standup",
+      });
+
+      const formatted = formatIncomingMessage(incoming);
+
+      expect(formatted).toContain("[Context: Weekly sync]");
+      expect(formatted).toContain('in group "Weekly Standup"');
+    });
   });
 
   // ========================================================================

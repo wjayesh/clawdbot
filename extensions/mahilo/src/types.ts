@@ -97,6 +97,22 @@ export interface Friend {
   since?: string;
 }
 
+export interface Group {
+  id: string;
+  name: string;
+  description?: string;
+  owner: string;
+  member_count?: number;
+  created_at?: string;
+}
+
+export interface GroupMember {
+  username: string;
+  display_name?: string;
+  role: "owner" | "admin" | "member";
+  joined_at?: string;
+}
+
 export interface RegisterAgentRequest {
   framework: string;
   label: string;
@@ -146,6 +162,10 @@ export interface IncomingMessage {
   message: string;
   context?: string;
   timestamp: string;
+  /** Group ID if this message was sent to a group */
+  group_id?: string;
+  /** Group name if this message was sent to a group */
+  group_name?: string;
 }
 
 // =============================================================================

@@ -114,10 +114,12 @@ export function createWebhookHandler(ctx: HandlerContext) {
       try {
         const mahiloClient = getMahiloClient(config);
 
-        // Fetch applicable policies for inbound messages from this sender
+        // Fetch applicable policies for inbound messages
+        // For group messages, include group policies; otherwise use sender policies
         const policies = await mahiloClient.getApplicablePolicies({
           direction: "inbound",
           targetUser: body.sender,
+          targetGroup: body.group_id,
         });
 
         if (policies.length > 0) {

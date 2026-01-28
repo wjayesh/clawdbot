@@ -1,7 +1,7 @@
 /**
  * list_mahilo_contacts Tool
  *
- * Lists friends on Mahilo that you can message.
+ * Lists friends and groups on Mahilo that you can message.
  */
 
 import { Type } from "@sinclair/typebox";
@@ -15,23 +15,30 @@ import type { MoltbotPluginApi } from "clawdbot/plugin-sdk";
 export function createListContactsTool(api: MoltbotPluginApi) {
   return {
     name: "list_mahilo_contacts",
-    description: `List your friends on Mahilo that you can message.
+    description: `List your friends and groups on Mahilo that you can message.
 
 Use this when you need to:
 - See who you can contact via Mahilo
 - Check if a specific user is in your friends list
-- Find the username of someone you want to message`,
+- See the groups you're a member of
+- Find the username or group id of someone/something you want to message`,
 
     parameters: Type.Object({
       status: Type.Optional(
         Type.String({
-          description: 'Filter by status: "accepted" (default), "pending", or "all"',
+          description: 'Filter friends by status: "accepted" (default), "pending", or "all"',
+        }),
+      ),
+      include_groups: Type.Optional(
+        Type.Boolean({
+          description: "Include groups you're a member of (default: true)",
         }),
       ),
     }),
 
     async execute(_id: string, params: Record<string, unknown>) {
       const statusParam = params.status ? String(params.status).trim().toLowerCase() : "accepted";
+      const includeGroups = params.include_groups !== false; // Default to true
       const config = resolveConfig(api.pluginConfig);
 
       // Get Mahilo client
@@ -53,10 +60,13 @@ Use this when you need to:
             : (statusParam as "accepted" | "pending" | "blocked");
         const friends = await mahiloClient.getFriends(status);
 
-        if (friends.length === 0) {
+        // Fetch groups if requested
+        const groups = includeGroups ? await mahiloClient.getGroups().catch(() => []) : [];
+
+        if (friends.length === 0 && groups.length === 0) {
           if (statusParam === "accepted") {
             return formatResult(
-              "You have no friends on Mahilo yet. Add friends via the Mahilo dashboard to start messaging.",
+              "You have no friends or groups on Mahilo yet. Add friends or join groups via the Mahilo dashboard to start messaging.",
             );
           }
           return formatResult(`No ${statusParam} friend requests found.`);
@@ -64,7 +74,7 @@ Use this when you need to:
 
         let result = "Your Mahilo contacts:\n\n";
 
-        // Group by status
+        // Friends section
         const accepted = friends.filter((f) => f.status === "accepted");
         const pending = friends.filter((f) => f.status === "pending");
 
@@ -82,6 +92,18 @@ Use this when you need to:
           for (const friend of pending) {
             const displayName = friend.display_name ? ` (${friend.display_name})` : "";
             result += `- ${friend.username}${displayName}\n`;
+          }
+        }
+
+        // Groups section
+        if (groups.length > 0) {
+          if (friends.length > 0) result += "\n";
+          result += "**Groups:**\n";
+          for (const group of groups) {
+            const description = group.description ? ` - ${group.description}` : "";
+            const memberCount = group.member_count ? ` (${group.member_count} members)` : "";
+            result += `- ${group.name}${memberCount}${description}\n`;
+            result += `  ID: ${group.id}\n`;
           }
         }
 

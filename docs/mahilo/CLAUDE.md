@@ -103,7 +103,7 @@ extensions/mahilo/
 ## Current Status
 
 **Phase 1**: 38/38 complete (100%)
-**Phase 2**: 11/32 complete (34%) - 16 pending, 5 blocked
+**Phase 2**: 17/32 complete (53%) - 10 pending, 5 blocked
 
 ### What Works
 - Full message exchange loop (send, receive, trigger agent, respond)
@@ -111,11 +111,12 @@ extensions/mahilo/
 - LLM policy evaluation (fetch from registry, evaluate locally)
 - Signature verification, deduplication
 - Callback URL detection, state persistence
+- Group messaging (send to groups, receive group messages)
 
 ### What's Next
-- Group messaging (registry supports it, plugin needs wiring)
 - Policy sync (fetch and merge registry policies)
 - Trusted routing config controls
+- Callback secret rotation
 
 ### What's Blocked
 - E2E encryption (waiting on registry encryption spec)

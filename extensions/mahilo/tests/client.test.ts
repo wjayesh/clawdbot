@@ -473,6 +473,141 @@ describe("MahiloClient", () => {
       expect(result).toEqual({ friendship_id: "f_123", status: "pending" });
     });
   });
+
+  // ==========================================================================
+  // Group Methods Tests
+  // ==========================================================================
+
+  describe("getGroups", () => {
+    it("should fetch groups list", async () => {
+      const groups = [
+        { id: "grp_1", name: "Team Alpha", owner: "alice", member_count: 5 },
+        { id: "grp_2", name: "Project Beta", owner: "bob", member_count: 3 },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(groups),
+      });
+
+      const result = await client.getGroups();
+
+      expect(result).toEqual(groups);
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${baseUrl}/groups`,
+        expect.anything(),
+      );
+    });
+
+    it("should handle empty groups list", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      const result = await client.getGroups();
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe("getGroup", () => {
+    it("should fetch single group details", async () => {
+      const group = {
+        id: "grp_1",
+        name: "Team Alpha",
+        description: "Main team channel",
+        owner: "alice",
+        member_count: 5,
+        created_at: "2025-01-01T00:00:00Z",
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(group),
+      });
+
+      const result = await client.getGroup("grp_1");
+
+      expect(result).toEqual(group);
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${baseUrl}/groups/grp_1`,
+        expect.anything(),
+      );
+    });
+
+    it("should throw GROUP_NOT_FOUND for 404", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+        json: () => Promise.resolve({ error: "Group not found", code: "GROUP_NOT_FOUND" }),
+      });
+
+      await expect(client.getGroup("nonexistent")).rejects.toThrow(MahiloError);
+    });
+  });
+
+  describe("getGroupMembers", () => {
+    it("should fetch group members", async () => {
+      const members = [
+        { username: "alice", display_name: "Alice", role: "owner", joined_at: "2025-01-01T00:00:00Z" },
+        { username: "bob", display_name: "Bob", role: "admin", joined_at: "2025-01-02T00:00:00Z" },
+        { username: "charlie", role: "member", joined_at: "2025-01-03T00:00:00Z" },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(members),
+      });
+
+      const result = await client.getGroupMembers("grp_1");
+
+      expect(result).toEqual(members);
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${baseUrl}/groups/grp_1/members`,
+        expect.anything(),
+      );
+    });
+
+    it("should throw NOT_GROUP_MEMBER for 403", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        statusText: "Forbidden",
+        json: () => Promise.resolve({ error: "Not a group member", code: "NOT_GROUP_MEMBER" }),
+      });
+
+      await expect(client.getGroupMembers("grp_secret")).rejects.toThrow(MahiloError);
+    });
+  });
+
+  describe("sendMessage to group", () => {
+    it("should send group message with recipient_type", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ message_id: "msg_grp_123", status: "delivered" }),
+      });
+
+      const result = await client.sendMessage({
+        recipient: "grp_1",
+        recipient_type: "group",
+        message: "Hello team!",
+      });
+
+      expect(result.status).toBe("delivered");
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${baseUrl}/messages/send`,
+        expect.objectContaining({
+          body: JSON.stringify({
+            recipient: "grp_1",
+            recipient_type: "group",
+            message: "Hello team!",
+          }),
+        }),
+      );
+    });
+  });
 });
 
 // =============================================================================

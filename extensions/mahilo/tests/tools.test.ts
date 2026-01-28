@@ -64,6 +64,9 @@ function createMockClient(overrides: Record<string, any> = {}) {
   return {
     sendMessage: vi.fn().mockResolvedValue({ message_id: "msg_123", status: "delivered" }),
     getFriends: vi.fn().mockResolvedValue([]),
+    getGroups: vi.fn().mockResolvedValue([]),
+    getGroup: vi.fn().mockResolvedValue(null),
+    getGroupMembers: vi.fn().mockResolvedValue([]),
     getContactConnections: vi.fn().mockResolvedValue([]),
     getApplicablePolicies: vi.fn().mockResolvedValue([]),
     registerAgent: vi.fn().mockResolvedValue({ connection_id: "c1", callback_secret: "s" }),
@@ -894,10 +897,11 @@ describe("list_mahilo_contacts Tool", () => {
 
     it("should handle empty friends list", async () => {
       mockClient.getFriends.mockResolvedValueOnce([]);
+      mockClient.getGroups.mockResolvedValueOnce([]);
 
       const result = await tool.execute("tool_1", {});
 
-      expect(result.content[0].text).toContain("no friends on Mahilo yet");
+      expect(result.content[0].text).toContain("no friends or groups on Mahilo yet");
     });
 
     it("should filter by pending status", async () => {
@@ -976,6 +980,100 @@ describe("list_mahilo_contacts Tool", () => {
       const result = await tool.execute("tool_1", {});
 
       expect(result.content[0].text).toContain("Failed to fetch contacts");
+    });
+  });
+
+  describe("groups support", () => {
+    it("should include groups by default", async () => {
+      mockClient.getFriends.mockResolvedValueOnce([
+        { id: "f1", username: "alice", status: "accepted" },
+      ]);
+      mockClient.getGroups.mockResolvedValueOnce([
+        { id: "grp_1", name: "Team Alpha", owner: "alice", member_count: 5 },
+        { id: "grp_2", name: "Project Beta", owner: "bob", description: "Main project channel" },
+      ]);
+
+      const result = await tool.execute("tool_1", {});
+
+      expect(result.content[0].text).toContain("**Groups:**");
+      expect(result.content[0].text).toContain("Team Alpha");
+      expect(result.content[0].text).toContain("grp_1");
+      expect(result.content[0].text).toContain("Project Beta");
+      expect(result.content[0].text).toContain("Main project channel");
+      expect(result.content[0].text).toContain("(5 members)");
+    });
+
+    it("should exclude groups when include_groups=false", async () => {
+      mockClient.getFriends.mockResolvedValueOnce([
+        { id: "f1", username: "alice", status: "accepted" },
+      ]);
+      mockClient.getGroups.mockResolvedValueOnce([
+        { id: "grp_1", name: "Team Alpha", owner: "alice" },
+      ]);
+
+      const result = await tool.execute("tool_1", { include_groups: false });
+
+      expect(result.content[0].text).not.toContain("**Groups:**");
+      expect(result.content[0].text).not.toContain("Team Alpha");
+      expect(mockClient.getGroups).not.toHaveBeenCalled();
+    });
+
+    it("should handle groups API error gracefully", async () => {
+      mockClient.getFriends.mockResolvedValueOnce([
+        { id: "f1", username: "alice", status: "accepted" },
+      ]);
+      mockClient.getGroups.mockRejectedValueOnce(new Error("Groups API error"));
+
+      const result = await tool.execute("tool_1", {});
+
+      // Should still show friends even if groups fail
+      expect(result.content[0].text).toContain("alice");
+      expect(result.content[0].text).not.toContain("**Groups:**");
+    });
+
+    it("should show empty message when no friends or groups", async () => {
+      mockClient.getFriends.mockResolvedValueOnce([]);
+      mockClient.getGroups.mockResolvedValueOnce([]);
+
+      const result = await tool.execute("tool_1", {});
+
+      expect(result.content[0].text).toContain("no friends or groups on Mahilo yet");
+    });
+
+    it("should show only groups when no friends", async () => {
+      mockClient.getFriends.mockResolvedValueOnce([]);
+      mockClient.getGroups.mockResolvedValueOnce([
+        { id: "grp_1", name: "Team Alpha", owner: "alice", member_count: 3 },
+      ]);
+
+      const result = await tool.execute("tool_1", {});
+
+      expect(result.content[0].text).toContain("**Groups:**");
+      expect(result.content[0].text).toContain("Team Alpha");
+      expect(result.content[0].text).not.toContain("**Friends:**");
+    });
+
+    it("should display group ID on separate line", async () => {
+      mockClient.getFriends.mockResolvedValueOnce([]);
+      mockClient.getGroups.mockResolvedValueOnce([
+        { id: "grp_test_123", name: "Test Group", owner: "alice" },
+      ]);
+
+      const result = await tool.execute("tool_1", {});
+
+      expect(result.content[0].text).toContain("ID: grp_test_123");
+    });
+
+    it("should handle groups without member_count", async () => {
+      mockClient.getFriends.mockResolvedValueOnce([]);
+      mockClient.getGroups.mockResolvedValueOnce([
+        { id: "grp_1", name: "Team Alpha", owner: "alice" },
+      ]);
+
+      const result = await tool.execute("tool_1", {});
+
+      expect(result.content[0].text).toContain("Team Alpha");
+      expect(result.content[0].text).not.toContain("members)");
     });
   });
 });

@@ -19,14 +19,31 @@ export interface TriggerAgentContext {
  * Format an incoming Mahilo message for the agent.
  */
 export function formatIncomingMessage(incoming: IncomingMessage): string {
-  let formatted = `📬 Message from ${incoming.sender} (via Mahilo):\n\n`;
+  // Check if this is a group message
+  const isGroupMessage = Boolean(incoming.group_id || incoming.group_name);
+  const groupDisplay = incoming.group_name ?? incoming.group_id;
+
+  let formatted: string;
+  if (isGroupMessage) {
+    formatted = `📬 Message from ${incoming.sender} in group "${groupDisplay}" (via Mahilo):\n\n`;
+  } else {
+    formatted = `📬 Message from ${incoming.sender} (via Mahilo):\n\n`;
+  }
+
   formatted += incoming.message;
 
   if (incoming.context) {
     formatted += `\n\n[Context: ${incoming.context}]`;
   }
 
-  formatted += `\n\n---\nTo reply, use the talk_to_agent tool with recipient "${incoming.sender}".`;
+  formatted += "\n\n---\n";
+
+  if (isGroupMessage) {
+    formatted += `To reply to the group, use the talk_to_group tool with group_id "${incoming.group_id}".\n`;
+    formatted += `To reply directly to ${incoming.sender}, use the talk_to_agent tool with recipient "${incoming.sender}".`;
+  } else {
+    formatted += `To reply, use the talk_to_agent tool with recipient "${incoming.sender}".`;
+  }
 
   return formatted;
 }
@@ -35,14 +52,25 @@ export function formatIncomingMessage(incoming: IncomingMessage): string {
  * Build extra system prompt context for the agent.
  */
 function buildExtraSystemPrompt(incoming: IncomingMessage): string {
-  return [
+  const isGroupMessage = Boolean(incoming.group_id || incoming.group_name);
+  const groupDisplay = incoming.group_name ?? incoming.group_id;
+
+  const lines: (string | null)[] = [
     `You are receiving a message from another agent via the Mahilo network.`,
     `Sender: ${incoming.sender}`,
     incoming.sender_agent ? `Sender Agent: ${incoming.sender_agent}` : null,
-    `To reply, use the talk_to_agent tool with recipient "${incoming.sender}".`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  ];
+
+  if (isGroupMessage) {
+    lines.push(`Group: ${groupDisplay}`);
+    lines.push(`Group ID: ${incoming.group_id}`);
+    lines.push(`To reply to the group, use the talk_to_group tool with group_id "${incoming.group_id}".`);
+    lines.push(`To reply directly to the sender, use the talk_to_agent tool with recipient "${incoming.sender}".`);
+  } else {
+    lines.push(`To reply, use the talk_to_agent tool with recipient "${incoming.sender}".`);
+  }
+
+  return lines.filter(Boolean).join("\n");
 }
 
 export interface TriggerAgentResult {
@@ -64,7 +92,8 @@ export async function triggerAgentRun(
 ): Promise<TriggerAgentResult> {
   const formattedMessage = formatIncomingMessage(incoming);
 
-  ctx.logger.info(`[Mahilo] Received message from ${incoming.sender}: ${incoming.message_id}`);
+  const groupInfo = incoming.group_id ? ` in group ${incoming.group_name ?? incoming.group_id}` : "";
+  ctx.logger.info(`[Mahilo] Received message from ${incoming.sender}${groupInfo}: ${incoming.message_id}`);
   ctx.logger.info(`[Mahilo] Message: ${incoming.message}`);
 
   // Determine target session
@@ -93,7 +122,7 @@ export async function triggerAgentRun(
     ctx.logger.info(`[Mahilo] Agent run triggered: runId=${runId}, sessionKey=${sessionKey}`);
 
     // Log metadata for tracking
-    const metadata = {
+    const metadata: Record<string, unknown> = {
       source: "mahilo",
       mahilo_message_id: incoming.message_id,
       mahilo_correlation_id: incoming.correlation_id,
@@ -103,6 +132,12 @@ export async function triggerAgentRun(
       session_key: sessionKey,
       received_at: new Date().toISOString(),
     };
+
+    // Include group info if present
+    if (incoming.group_id) {
+      metadata.mahilo_group_id = incoming.group_id;
+      metadata.mahilo_group_name = incoming.group_name;
+    }
 
     ctx.logger.info(`[Mahilo] Message metadata: ${JSON.stringify(metadata)}`);
 
