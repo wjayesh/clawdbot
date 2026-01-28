@@ -793,60 +793,54 @@
 
 ### 13. LLM-Based Policy Enforcement
 
-#### 13.1 LLM Policy Evaluation Engine
+> **Architecture**: Policies are managed on the Mahilo Registry (via dashboard/API).
+> Plugin fetches policies and runs LLM evaluation locally (keeps message content private).
+
+#### 13.1 Fetch LLM Policies from Registry
 - **ID**: `PLG-067`
 - **Status**: `pending`
 - **Priority**: P0
 - **Notes**:
-  - Implement LLM-based policy evaluation for semantic filtering
-  - Run on plugin side (not registry) to keep prompts private
-  - Support policy prompts like "Block requests for personal information"
-  - Evaluate both outbound and inbound messages
-  - Use configurable model (default to fast/cheap model)
+  - Registry already supports LLM policies: `POST /api/v1/policies` with `policy_type: "llm"`
+  - Plugin needs to fetch: `GET /api/v1/policies` (filter by policy_type=llm)
+  - Cache policies with TTL (e.g., 5 minutes)
+  - Fetch applicable policies for sender/recipient/group
 - **Acceptance Criteria**:
-  - [ ] LLM policy evaluator implemented
-  - [ ] Configurable model selection
-  - [ ] Works for outbound and inbound messages
-  - [ ] Caches results for identical messages (optional)
+  - [ ] Client method to fetch LLM policies
+  - [ ] Caching with configurable TTL
+  - [ ] Handle registry unavailable gracefully
 
-#### 13.2 LLM Policy Configuration
+#### 13.2 LLM Policy Evaluation Engine
 - **ID**: `PLG-068`
 - **Status**: `pending`
 - **Priority**: P0
 - **Notes**:
-  - Add llm_policies config section
-  - Support multiple policies with priority ordering
-  - Allow enable/disable per policy
-  - Example config:
-    ```yaml
-    llm_policies:
-      - name: "no-personal-info"
-        prompt: "Block messages requesting SSN, passwords, or financial details"
-        enabled: true
-        priority: 100
-      - name: "professional-tone"
-        prompt: "Block messages that are unprofessional or contain profanity"
-        enabled: true
-        priority: 50
-    ```
+  - Evaluate message against LLM policy prompt
+  - Call format: `policy_content` (prompt) + message → allow/block
+  - Use configurable model (default to fast/cheap model like haiku)
+  - Evaluate both outbound and inbound messages
+  - Return clear allow/block decision with optional reason
 - **Acceptance Criteria**:
-  - [ ] Config schema supports LLM policies
-  - [ ] Policies evaluated in priority order
-  - [ ] Can enable/disable individual policies
+  - [ ] LLM evaluator implemented
+  - [ ] Configurable model selection
+  - [ ] Works for outbound and inbound messages
+  - [ ] Handles LLM errors gracefully (fail-open or fail-closed configurable)
 
-#### 13.3 LLM Policy Integration with Tools
+#### 13.3 LLM Policy Integration with Message Flow
 - **ID**: `PLG-069`
 - **Status**: `pending`
 - **Priority**: P1
 - **Notes**:
-  - Integrate LLM policy check into talk_to_agent and talk_to_group
-  - Run after static policies, before sending
+  - Integrate into talk_to_agent and talk_to_group tools
+  - Integrate into inbound webhook handler
+  - Run after static policies (cheaper to filter obvious stuff first)
   - Clear rejection messages that don't leak policy details
-  - Option to run async (non-blocking) with logging only
+  - Evaluation order: sender global → per-recipient → group policies
 - **Acceptance Criteria**:
   - [ ] Tools check LLM policies before sending
+  - [ ] Webhook checks LLM policies on inbound
   - [ ] Rejection messages are helpful but not revealing
-  - [ ] Async/logging-only mode available
+  - [ ] Respects policy priority ordering
 
 #### 13.4 LLM Policy Tests
 - **ID**: `PLG-070`
@@ -854,12 +848,13 @@
 - **Priority**: P1
 - **Notes**:
   - Unit tests with mocked LLM responses
-  - Test policy ordering and enable/disable
+  - Test policy fetching and caching
+  - Test evaluation ordering (global → user → group)
   - Test rejection message formatting
 - **Acceptance Criteria**:
-  - [ ] Core evaluation logic tested
-  - [ ] Config parsing tested
-  - [ ] Integration with tools tested
+  - [ ] Policy fetch and cache tested
+  - [ ] Evaluation logic tested with mocks
+  - [ ] Integration with tools/webhook tested
 
 ---
 
