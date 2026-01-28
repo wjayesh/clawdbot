@@ -5,6 +5,8 @@
 import type {
   AgentConnection,
   Friend,
+  GetPoliciesResponse,
+  LlmPolicy,
   MahiloPluginConfig,
   RegisterAgentRequest,
   RegisterAgentResponse,
@@ -15,22 +17,39 @@ import { ErrorCodes, MahiloError } from "../types.js";
 
 const DEFAULT_TIMEOUT = 30_000;
 const MAX_RETRIES = 3;
+const DEFAULT_POLICY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 interface MahiloClientOptions {
   apiKey: string;
   baseUrl: string;
   timeout?: number;
+  policyCacheTtl?: number;
+}
+
+interface PolicyCache {
+  policies: LlmPolicy[];
+  fetchedAt: number;
 }
 
 export class MahiloClient {
   private apiKey: string;
   private baseUrl: string;
   private timeout: number;
+  private policyCacheTtl: number;
+  private policyCache: PolicyCache | null = null;
 
   constructor(options: MahiloClientOptions) {
     this.apiKey = options.apiKey;
     this.baseUrl = options.baseUrl.replace(/\/$/, ""); // Remove trailing slash
     this.timeout = options.timeout ?? DEFAULT_TIMEOUT;
+    this.policyCacheTtl = options.policyCacheTtl ?? DEFAULT_POLICY_CACHE_TTL;
+  }
+
+  /**
+   * Clear the policy cache (useful for testing or forcing refresh).
+   */
+  clearPolicyCache(): void {
+    this.policyCache = null;
   }
 
   private async request<T>(
@@ -165,6 +184,91 @@ export class MahiloClient {
 
   async sendMessage(request: SendMessageRequest): Promise<SendMessageResponse> {
     return this.request<SendMessageResponse>("POST", "/messages/send", request);
+  }
+
+  // =========================================================================
+  // Policy Methods
+  // =========================================================================
+
+  /**
+   * Fetch LLM policies from the registry with caching.
+   * Filters to only LLM-type policies that are enabled.
+   */
+  async getLlmPolicies(options?: { forceRefresh?: boolean }): Promise<LlmPolicy[]> {
+    const now = Date.now();
+
+    // Return cached policies if valid and not forcing refresh
+    if (
+      !options?.forceRefresh &&
+      this.policyCache &&
+      now - this.policyCache.fetchedAt < this.policyCacheTtl
+    ) {
+      return this.policyCache.policies;
+    }
+
+    try {
+      // Fetch policies from registry, filtered by policy_type=llm
+      const response = await this.request<GetPoliciesResponse>(
+        "GET",
+        "/policies?policy_type=llm",
+      );
+
+      // Filter to enabled policies only and sort by priority (descending)
+      const enabledPolicies = (response.policies ?? [])
+        .filter((p) => p.enabled)
+        .sort((a, b) => b.priority - a.priority);
+
+      // Update cache
+      this.policyCache = {
+        policies: enabledPolicies,
+        fetchedAt: now,
+      };
+
+      return enabledPolicies;
+    } catch (err) {
+      // If registry is unavailable and we have stale cache, use it
+      if (this.policyCache) {
+        return this.policyCache.policies;
+      }
+      // Otherwise, throw the error (caller can handle gracefully)
+      throw err;
+    }
+  }
+
+  /**
+   * Get policies applicable to a specific context.
+   * Returns policies in priority order (highest first).
+   */
+  async getApplicablePolicies(context: {
+    direction: "outbound" | "inbound";
+    targetUser?: string;
+    targetGroup?: string;
+  }): Promise<LlmPolicy[]> {
+    const allPolicies = await this.getLlmPolicies();
+
+    return allPolicies.filter((policy) => {
+      // Check direction
+      if (policy.direction !== "both" && policy.direction !== context.direction) {
+        return false;
+      }
+
+      // Check scope
+      switch (policy.scope) {
+        case "global":
+          return true;
+
+        case "user":
+          // User-scoped policies need a target user match
+          return context.targetUser && policy.target_user === context.targetUser;
+
+        case "group":
+          // Group-scoped policies need a target group match
+          return context.targetGroup && policy.target_group === context.targetGroup;
+
+        default:
+          return false;
+      }
+    });
   }
 }
 

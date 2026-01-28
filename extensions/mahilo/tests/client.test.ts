@@ -548,3 +548,322 @@ describe("getMahiloClient", () => {
     );
   });
 });
+
+// =============================================================================
+// getLlmPolicies Tests
+// =============================================================================
+
+describe("MahiloClient - LLM Policies", () => {
+  let client: MahiloClient;
+  const apiKey = "test-api-key";
+  const baseUrl = "https://api.mahilo.dev/api/v1";
+
+  beforeEach(() => {
+    client = new MahiloClient({ apiKey, baseUrl, policyCacheTtl: 1000 });
+    mockFetch.mockReset();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const samplePolicies = [
+    {
+      id: "pol_1",
+      name: "No profanity",
+      policy_content: "Check if the message contains profanity. Return BLOCK if it does.",
+      scope: "global",
+      direction: "both",
+      priority: 100,
+      enabled: true,
+      fail_behavior: "open",
+      created_at: "2025-01-01T00:00:00Z",
+      updated_at: "2025-01-01T00:00:00Z",
+    },
+    {
+      id: "pol_2",
+      name: "Confidential for Bob",
+      policy_content: "Block messages containing confidential info to bob.",
+      scope: "user",
+      direction: "outbound",
+      priority: 50,
+      target_user: "bob",
+      enabled: true,
+      fail_behavior: "closed",
+      created_at: "2025-01-01T00:00:00Z",
+      updated_at: "2025-01-01T00:00:00Z",
+    },
+    {
+      id: "pol_3",
+      name: "Disabled policy",
+      policy_content: "This is disabled",
+      scope: "global",
+      direction: "both",
+      priority: 200,
+      enabled: false,
+      created_at: "2025-01-01T00:00:00Z",
+      updated_at: "2025-01-01T00:00:00Z",
+    },
+  ];
+
+  describe("getLlmPolicies", () => {
+    it("should fetch LLM policies from registry", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ policies: samplePolicies }),
+      });
+
+      const result = await client.getLlmPolicies();
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${baseUrl}/policies?policy_type=llm`,
+        expect.anything(),
+      );
+      // Should only return enabled policies
+      expect(result).toHaveLength(2);
+      expect(result.every((p) => p.enabled)).toBe(true);
+    });
+
+    it("should filter out disabled policies", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ policies: samplePolicies }),
+      });
+
+      const result = await client.getLlmPolicies();
+
+      expect(result.find((p) => p.id === "pol_3")).toBeUndefined();
+    });
+
+    it("should sort policies by priority (descending)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ policies: samplePolicies }),
+      });
+
+      const result = await client.getLlmPolicies();
+
+      // pol_1 has priority 100, pol_2 has priority 50
+      expect(result[0].id).toBe("pol_1");
+      expect(result[1].id).toBe("pol_2");
+    });
+
+    it("should cache policies", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ policies: samplePolicies }),
+      });
+
+      // First call fetches
+      await client.getLlmPolicies();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      // Second call uses cache
+      await client.getLlmPolicies();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("should refresh cache after TTL expires", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ policies: samplePolicies }),
+      });
+
+      // First call
+      await client.getLlmPolicies();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      // Wait for TTL to expire (using small TTL of 1000ms)
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
+      // Second call should refresh
+      await client.getLlmPolicies();
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("should force refresh when requested", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ policies: samplePolicies }),
+      });
+
+      await client.getLlmPolicies();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      await client.getLlmPolicies({ forceRefresh: true });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("should use stale cache on registry error", async () => {
+      // First call succeeds
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ policies: samplePolicies }),
+      });
+      await client.getLlmPolicies();
+
+      // Wait for TTL to expire
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
+      // Second call fails
+      mockFetch.mockRejectedValueOnce(new Error("Network error"));
+      const result = await client.getLlmPolicies();
+
+      // Should return stale cached data
+      expect(result).toHaveLength(2);
+    });
+
+    it("should throw on registry error without cache", async () => {
+      mockFetch.mockRejectedValueOnce(new Error("Network error"));
+
+      await expect(client.getLlmPolicies()).rejects.toThrow();
+    });
+
+    it("should handle empty policies array", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ policies: [] }),
+      });
+
+      const result = await client.getLlmPolicies();
+      expect(result).toEqual([]);
+    });
+
+    it("should handle missing policies field", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+
+      const result = await client.getLlmPolicies();
+      expect(result).toEqual([]);
+    });
+
+    it("should clear cache manually", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ policies: samplePolicies }),
+      });
+
+      await client.getLlmPolicies();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      client.clearPolicyCache();
+
+      await client.getLlmPolicies();
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("getApplicablePolicies", () => {
+    beforeEach(() => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ policies: samplePolicies }),
+      });
+    });
+
+    it("should return global policies for any context", async () => {
+      const result = await client.getApplicablePolicies({
+        direction: "outbound",
+      });
+
+      // Should include pol_1 (global) but not pol_2 (user-scoped, no target match)
+      expect(result.some((p) => p.id === "pol_1")).toBe(true);
+      expect(result.some((p) => p.id === "pol_2")).toBe(false);
+    });
+
+    it("should include user-scoped policies when target matches", async () => {
+      const result = await client.getApplicablePolicies({
+        direction: "outbound",
+        targetUser: "bob",
+      });
+
+      // Should include both pol_1 (global) and pol_2 (user-scoped for bob)
+      expect(result.some((p) => p.id === "pol_1")).toBe(true);
+      expect(result.some((p) => p.id === "pol_2")).toBe(true);
+    });
+
+    it("should filter by direction", async () => {
+      const result = await client.getApplicablePolicies({
+        direction: "inbound",
+        targetUser: "bob",
+      });
+
+      // pol_1 is "both" so it applies
+      // pol_2 is "outbound" only, should not apply
+      expect(result.some((p) => p.id === "pol_1")).toBe(true);
+      expect(result.some((p) => p.id === "pol_2")).toBe(false);
+    });
+
+    it("should return policies in priority order", async () => {
+      const result = await client.getApplicablePolicies({
+        direction: "outbound",
+        targetUser: "bob",
+      });
+
+      // pol_1 (priority 100) should come before pol_2 (priority 50)
+      const pol1Index = result.findIndex((p) => p.id === "pol_1");
+      const pol2Index = result.findIndex((p) => p.id === "pol_2");
+      expect(pol1Index).toBeLessThan(pol2Index);
+    });
+
+    it("should handle group-scoped policies", async () => {
+      const groupPolicy = {
+        id: "pol_group",
+        name: "Group policy",
+        policy_content: "Block spam in group",
+        scope: "group",
+        direction: "both",
+        priority: 75,
+        target_group: "group_123",
+        enabled: true,
+        created_at: "2025-01-01T00:00:00Z",
+        updated_at: "2025-01-01T00:00:00Z",
+      };
+
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ policies: [...samplePolicies, groupPolicy] }),
+      });
+      client.clearPolicyCache();
+
+      const result = await client.getApplicablePolicies({
+        direction: "inbound",
+        targetGroup: "group_123",
+      });
+
+      expect(result.some((p) => p.id === "pol_group")).toBe(true);
+    });
+
+    it("should not include group policies without matching target", async () => {
+      const groupPolicy = {
+        id: "pol_group",
+        name: "Group policy",
+        policy_content: "Block spam in group",
+        scope: "group",
+        direction: "both",
+        priority: 75,
+        target_group: "group_123",
+        enabled: true,
+        created_at: "2025-01-01T00:00:00Z",
+        updated_at: "2025-01-01T00:00:00Z",
+      };
+
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ policies: [...samplePolicies, groupPolicy] }),
+      });
+      client.clearPolicyCache();
+
+      const result = await client.getApplicablePolicies({
+        direction: "inbound",
+        targetGroup: "different_group",
+      });
+
+      expect(result.some((p) => p.id === "pol_group")).toBe(false);
+    });
+  });
+});
